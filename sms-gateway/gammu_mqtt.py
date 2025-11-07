@@ -217,6 +217,8 @@ def check_inbox(client):
                 continue
         
         # Delete all read messages to prevent duplicates
+        # Note: "1" parameter refers to the SMS storage folder (1=phone memory)
+        # Gammu storage folders: 1=phone, 2=SIM card, 3=both
         if result.stdout and "Location" in result.stdout:
             try:
                 subprocess.run(
@@ -224,7 +226,7 @@ def check_inbox(client):
                     capture_output=True,
                     timeout=10
                 )
-                logger.debug("Deleted read messages")
+                logger.debug("Deleted read messages from phone memory")
             except Exception as e:
                 logger.warning(f"Could not delete messages: {e}")
                 

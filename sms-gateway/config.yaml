@@ -25,4 +25,4 @@ schema:
   mqtt_password: password?
   serial_device: str
   log_level: list(debug|info|warning|error)?
-image: "ghcr.io/{arch}-addon-sms-gateway"
+image: "ghcr.io/nnar1o/sms-gateway-{arch}"
