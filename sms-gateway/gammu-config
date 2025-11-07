@@ -1,0 +1,30 @@
+[gammu]
+# Device configuration for Huawei modem (ID 12d1:1506)
+device = /dev/ttyUSB0
+connection = at
+model = auto
+
+# Synchronize time
+# synchronizetime = yes
+
+# Log file location (optional)
+# logfile = /var/log/gammu.log
+
+# Log format: nothing, text, textall, textalldate, errors, errorsdate, binary
+# logformat = textall
+
+# Use locking to prevent concurrent device access
+# use_locking = yes
+
+# Gammu features
+# gammuloc = /usr/share/locale/
+
+# Additional AT commands configuration
+# startinfo = yes
+
+# Network information
+# networkinfo = AUTO
+
+# SIM card settings
+# Attempts to read SIM phonebook
+# checksecurity = yes

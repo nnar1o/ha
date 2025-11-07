@@ -1,0 +1,14 @@
+# Udev rules for Huawei modem (ID 12d1:1506)
+# This rule ensures the modem is properly recognized and accessible
+
+# Huawei E173 and compatible modems
+SUBSYSTEM=="usb", ATTRS{idVendor}=="12d1", ATTRS{idProduct}=="1506", MODE="0666", GROUP="dialout"
+
+# Create symlink for easy identification
+SUBSYSTEM=="usb", ATTRS{idVendor}=="12d1", ATTRS{idProduct}=="1506", SYMLINK+="huawei_modem"
+
+# Set permissions for ttyUSB devices created by this modem
+KERNEL=="ttyUSB*", ATTRS{idVendor}=="12d1", ATTRS{idProduct}=="1506", MODE="0666", GROUP="dialout"
+
+# Automatically load necessary kernel modules
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="12d1", ATTRS{idProduct}=="1506", RUN+="/sbin/modprobe option", RUN+="/sbin/modprobe usb_wwan"
