@@ -1,4 +1,4 @@
-version: "1.0.2"
+version: "1.0.3"
 slug: "sms-gateway"
 name: "SMS Gateway"
 description: "SMS Gateway using Huawei modem (12d1:1506)"

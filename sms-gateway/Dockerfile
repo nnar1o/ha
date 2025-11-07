@@ -21,4 +21,4 @@ COPY rootfs /
 WORKDIR /app
 
 # Set version in version.txt
-RUN echo "1.0.2" > /app/version.txt
+RUN echo "1.0.3" > /app/version.txt

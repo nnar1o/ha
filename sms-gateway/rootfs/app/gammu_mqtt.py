@@ -7,18 +7,22 @@ import logging
 import sys
 import requests
 import gammu
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s UTC - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[
         logging.StreamHandler(sys.stdout)
     ]
 )
 _LOGGER = logging.getLogger(__name__)
+
+def get_utc_time():
+    """Get current UTC time in YYYY-MM-DD HH:MM:SS format"""
+    return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
 def get_version():
     """Get version from version.txt file"""
@@ -78,14 +82,14 @@ modem_connected = False
 def log_sms_received(number, message):
     """Log detailed information about received SMS"""
     _LOGGER.info(f"SMS Received - From: {number}")
-    _LOGGER.info(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    _LOGGER.info(f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
     _LOGGER.info(f"Message: {message}")
 
 def log_sms_sent(number, message, success=True):
     """Log SMS sending attempt with timestamp"""
     status = "Successfully sent" if success else "Failed to send"
     _LOGGER.info(f"SMS {status} - To: {number}")
-    _LOGGER.info(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    _LOGGER.info(f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
     _LOGGER.info(f"Message: {message}")
 
 def connect_modem():
@@ -228,7 +232,7 @@ def check_modem_status():
 def send_sms(number, message):
     """Send SMS with proper logging"""
     try:
-        _LOGGER.info(f"Attempting to send SMS to {number} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        _LOGGER.info(f"Attempting to send SMS to {number} at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
         result = subprocess.run(
             ["gammu", "--device", DEVICE, "sendsms", "TEXT", number, "-text", message],
             capture_output=True,
@@ -251,7 +255,7 @@ def send_sms(number, message):
 def on_connect(client, userdata, flags, rc, properties=None):
     """Log MQTT connection status"""
     if rc == 0:
-        _LOGGER.info(f"Connected to MQTT broker successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        _LOGGER.info(f"Connected to MQTT broker successfully at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
         client.subscribe(OUTBOX_TOPIC)
         _LOGGER.info(f"Subscribed to {OUTBOX_TOPIC}")
     else:
@@ -319,7 +323,7 @@ def check_inbox(client):
                 client.publish(INBOX_TOPIC, json.dumps(message_data))
                 
                 # Update last message sensor
-                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
                 last_message = {
                     "number": number,
                     "text": text,
@@ -386,9 +390,9 @@ def main():
     
     # Startup banner
     _LOGGER.info("=" * 60)
-    _LOGGER.info(f"SMS Gateway v{version} starting...")
+    _LOGGER.info(f"SMS Gateway v{version} starting at {get_utc_time()}")
     _LOGGER.info(f"Python version: {sys.version.split()[0]}")
-    _LOGGER.info(f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    _LOGGER.info(f"Current time: {get_utc_time()}")
     
     try:
         _LOGGER.info(f"Gammu version: {gammu.Version()}")
