@@ -20,6 +20,8 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
+VERSION = "1.0.4"
+
 def get_utc_time():
     """Get current UTC time in YYYY-MM-DD HH:MM:SS format"""
     return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
@@ -31,6 +33,25 @@ def get_version():
             return f.read().strip()
     except:
         return "unknown"
+
+def log_startup_info():
+    """Log startup information"""
+    _LOGGER.info(f"SMS Gateway v{VERSION} starting...")
+    _LOGGER.info(f"Current time (UTC): {get_utc_time()}")
+    _LOGGER.info(f"Python version: {sys.version.split()[0]}")
+    try:
+        _LOGGER.info(f"Gammu version: {gammu.Version()}")
+    except:
+        _LOGGER.error("Failed to get Gammu version")
+
+def log_sms_operation(operation_type, number, message, success=True):
+    """Log SMS operations with UTC timestamp"""
+    status = "Success" if success else "Failed"
+    _LOGGER.info(f"Time (UTC): {get_utc_time()}")
+    _LOGGER.info(f"Operation: {operation_type}")
+    _LOGGER.info(f"Status: {status}")
+    _LOGGER.info(f"Number: {number}")
+    _LOGGER.info(f"Message: {message}")
 
 # Constants for modem retry logic
 MAX_RETRIES = 5
@@ -386,6 +407,7 @@ def register_ha_service():
 
 def main():
     """Main application loop"""
+    log_startup_info()
     version = get_version()
     
     # Startup banner

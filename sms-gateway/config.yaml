@@ -1,6 +1,6 @@
-version: "1.0.3"
-slug: "sms-gateway"
 name: "SMS Gateway"
+version: "1.0.4"
+slug: "sms-gateway"
 description: "SMS Gateway using Huawei modem (12d1:1506)"
 url: "https://github.com/nnar1o/ha/tree/main/sms-gateway"
 arch:
