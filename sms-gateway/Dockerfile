@@ -1,5 +1,8 @@
-FROM homeassistant/amd64-base-python:3.11-alpine3.18
-ENV LANG C.UTF-8
+ARG BUILD_FROM
+FROM ${BUILD_FROM}
+
+# Fix ENV format
+ENV LANG=C.UTF-8
 
 # Install required packages
 RUN apk add --no-cache \
@@ -12,11 +15,10 @@ RUN apk add --no-cache \
 # Install Python packages
 RUN pip3 install --no-cache-dir \
     paho-mqtt \
-    python-gammu \
-    requests
+    python-gammu
 
 COPY rootfs /
 WORKDIR /app
 
 # Set version in version.txt
-RUN echo "1.0.1" > /app/version.txt
+RUN echo "1.0.2" > /app/version.txt
