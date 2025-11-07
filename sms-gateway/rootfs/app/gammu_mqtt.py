@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 import requests
+import gammu
 from datetime import datetime
 
 # Setup logging
@@ -18,11 +19,9 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-# Environment variables
-MQTT_HOST = os.getenv('MQTT_HOST', 'core-mosquitto')
-MQTT_PORT = int(os.getenv('MQTT_PORT', '1883'))
-MQTT_USER = os.getenv('MQTT_USER', '')
-MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', '')
+# Constants for modem retry logic
+MAX_RETRIES = 5
+RETRY_DELAY = 5  # seconds
 
 # Configuration from add-on options
 OPTIONS_PATH = '/data/options.json'
@@ -32,11 +31,23 @@ try:
         DEVICE = options.get('device', '/dev/ttyUSB0')
         DEBUG = options.get('debug', False)
         NOTIFICATION_ON_RECEIVE = options.get('notification_on_receive', True)
+        
+        # MQTT configuration from options
+        mqtt_config = options.get('mqtt', {})
+        MQTT_HOST = mqtt_config.get('broker', 'core-mosquitto')
+        MQTT_PORT = int(mqtt_config.get('port', 1883))
+        MQTT_USER = mqtt_config.get('username', '')
+        MQTT_PASSWORD = mqtt_config.get('password', '')
 except FileNotFoundError:
     _LOGGER.warning(f"Options file not found at {OPTIONS_PATH}, using defaults")
     DEVICE = os.getenv('SERIAL_DEVICE', '/dev/ttyUSB0')
     DEBUG = False
     NOTIFICATION_ON_RECEIVE = True
+    # Fallback to environment variables for MQTT
+    MQTT_HOST = os.getenv('MQTT_HOST', 'core-mosquitto')
+    MQTT_PORT = int(os.getenv('MQTT_PORT', '1883'))
+    MQTT_USER = os.getenv('MQTT_USER', '')
+    MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', '')
 
 # Set debug level if enabled
 if DEBUG:
@@ -68,6 +79,26 @@ def log_sms_sent(number, message, success=True):
     level(f"SMS {status} - To: {number}")
     level(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     level(f"Message: {message}")
+
+def connect_modem():
+    """Connect to modem with retry logic"""
+    for attempt in range(MAX_RETRIES):
+        try:
+            _LOGGER.info(f"Attempting to connect to modem (attempt {attempt + 1}/{MAX_RETRIES})")
+            state_machine = gammu.StateMachine()
+            state_machine.ReadConfig(0)
+            state_machine.Init()
+            _LOGGER.info("Successfully connected to modem")
+            return state_machine
+        except gammu.ERR_DEVICENOTEXIST:
+            _LOGGER.warning(f"Modem not found at {DEVICE}, will retry in {RETRY_DELAY} seconds...")
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_DELAY)
+        except Exception as e:
+            _LOGGER.warning(f"Error connecting to modem: {e}, will retry in {RETRY_DELAY} seconds...")
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_DELAY)
+    raise Exception("Failed to connect to modem after maximum retries")
 
 def update_ha_sensor(entity_id, state, attributes=None):
     """Update Home Assistant sensor via API"""
@@ -186,7 +217,7 @@ def check_modem_status():
             )
         return False
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, rc, properties=None):
     """MQTT connection callback"""
     if rc == 0:
         _LOGGER.info("Connected to MQTT broker")
@@ -333,6 +364,7 @@ def main():
     _LOGGER.info(f"Starting SMS Gateway with device: {DEVICE}")
     _LOGGER.info(f"Debug mode: {DEBUG}")
     _LOGGER.info(f"Notifications on receive: {NOTIFICATION_ON_RECEIVE}")
+    _LOGGER.info(f"MQTT Broker: {MQTT_HOST}:{MQTT_PORT}")
     
     # Initial modem check
     if check_modem_status():
@@ -340,8 +372,8 @@ def main():
     else:
         _LOGGER.warning("Modem is not responding, will retry...")
     
-    # Setup MQTT
-    client = mqtt.Client()
+    # Setup MQTT with new API version
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     if MQTT_USER:
         client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
     client.on_connect = on_connect
