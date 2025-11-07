@@ -1,0 +1,5 @@
+mqtt_host: core-mosquitto
+mqtt_port: 1883
+mqtt_user: ""
+mqtt_password: ""
+serial_device: /dev/ttyUSB0
