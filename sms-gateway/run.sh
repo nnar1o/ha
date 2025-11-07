@@ -58,10 +58,13 @@ bashio::log.info "Modem device found: ${SERIAL_DEVICE}"
 
 # Test gammu connection
 bashio::log.info "Testing gammu connection..."
-if gammu --config /root/.gammurc identify 2>&1 | grep -q "Manufacturer"; then
+if gammu --config /root/.gammurc identify 2>&1 | grep -qE "(Manufacturer|Model|IMEI|Phone)"; then
     bashio::log.info "Gammu connection successful!"
+    gammu --config /root/.gammurc identify 2>&1 | head -3 | while read line; do
+        bashio::log.info "  $line"
+    done
 else
-    bashio::log.warning "Could not identify modem, but continuing anyway..."
+    bashio::log.warning "Could not fully identify modem, but continuing anyway..."
     bashio::log.warning "This might be normal during initialization."
 fi
 

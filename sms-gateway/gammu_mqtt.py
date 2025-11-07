@@ -6,7 +6,7 @@ import json
 import logging
 import sys
 from datetime import datetime
-from queue import Queue
+from queue import Queue, Empty
 from threading import Thread
 
 # Configuration from environment variables
@@ -179,9 +179,11 @@ def message_sender_worker(client):
             # Brief delay between messages
             time.sleep(2)
             
+        except Empty:
+            # Queue is empty, continue waiting
+            continue
         except Exception as e:
-            if "Empty" not in str(e):  # Ignore queue.Empty exceptions
-                logger.error(f"Error in message sender worker: {e}")
+            logger.error(f"Error in message sender worker: {e}")
             continue
 
 
@@ -205,8 +207,9 @@ def check_inbox(client):
         
         # Parse SMS messages from gammu output
         sms_messages = result.stdout.split("SMS message")
+        messages_processed = False
         
-        for i, sms in enumerate(sms_messages[1:], 1):  # Skip first empty element
+        for sms in sms_messages[1:]:  # Skip first empty element
             lines = sms.strip().splitlines()
             number = None
             text = None
@@ -230,17 +233,19 @@ def check_inbox(client):
                 
                 client.publish(INBOX_TOPIC, json.dumps(message))
                 logger.info(f"Published SMS from {number} to {INBOX_TOPIC}")
-                
-                # Delete message after processing
-                try:
-                    subprocess.run(
-                        ["gammu", "--config", "/root/.gammurc", "deletesms", "1", str(i)],
-                        capture_output=True,
-                        timeout=10
-                    )
-                    logger.debug(f"Deleted processed message {i}")
-                except Exception as e:
-                    logger.warning(f"Could not delete message {i}: {e}")
+                messages_processed = True
+        
+        # Delete all processed messages after successfully publishing them
+        if messages_processed:
+            try:
+                subprocess.run(
+                    ["gammu", "--config", "/root/.gammurc", "deleteallsms", "1"],
+                    capture_output=True,
+                    timeout=10
+                )
+                logger.debug("Deleted all processed messages from folder 1")
+            except Exception as e:
+                logger.warning(f"Could not delete messages: {e}")
                     
     except subprocess.TimeoutExpired:
         logger.warning("Timeout while checking inbox")
