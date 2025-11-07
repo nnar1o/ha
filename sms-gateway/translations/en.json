@@ -1,0 +1,28 @@
+{
+  "configuration": {
+    "mqtt_host": {
+      "name": "MQTT Host",
+      "description": "The hostname or IP address of your MQTT broker"
+    },
+    "mqtt_port": {
+      "name": "MQTT Port",
+      "description": "The port of your MQTT broker"
+    },
+    "mqtt_user": {
+      "name": "MQTT Username",
+      "description": "Username for MQTT authentication (optional)"
+    },
+    "mqtt_password": {
+      "name": "MQTT Password",
+      "description": "Password for MQTT authentication (optional)"
+    },
+    "serial_device": {
+      "name": "Serial Device",
+      "description": "Path to the USB modem device (e.g., /dev/ttyUSB0)"
+    },
+    "log_level": {
+      "name": "Log Level",
+      "description": "Logging level for the add-on"
+    }
+  }
+}

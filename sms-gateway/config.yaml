@@ -1,5 +1,28 @@
-mqtt_host: core-mosquitto
-mqtt_port: 1883
-mqtt_user: ""
-mqtt_password: ""
-serial_device: /dev/ttyUSB0
+name: SMS Gateway
+version: "1.0.0"
+slug: sms-gateway
+description: Send and receive SMS messages through Huawei USB modem via MQTT integration
+url: https://github.com/nnar1o/ha/tree/main/sms-gateway
+arch:
+  - armhf
+  - armv7
+  - aarch64
+  - amd64
+  - i386
+startup: services
+boot: auto
+options:
+  mqtt_host: core-mosquitto
+  mqtt_port: 1883
+  mqtt_user: ""
+  mqtt_password: ""
+  serial_device: /dev/ttyUSB0
+  log_level: info
+schema:
+  mqtt_host: str
+  mqtt_port: port
+  mqtt_user: str?
+  mqtt_password: password?
+  serial_device: str
+  log_level: list(debug|info|warning|error)?
+image: "ghcr.io/{arch}-addon-sms-gateway"

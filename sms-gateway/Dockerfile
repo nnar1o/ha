@@ -1,11 +1,24 @@
-FROM python:3.11-slim
+ARG BUILD_FROM
+FROM $BUILD_FROM
 
-RUN apt-get update && \
-    apt-get install -y gammu && \
-    pip install paho-mqtt && \
-    rm -rf /var/lib/apt/lists/*
+# Install requirements for add-on
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    gammu \
+    bash
+
+# Install Python packages
+RUN pip3 install --no-cache-dir \
+    paho-mqtt
+
+# Copy data for add-on
+COPY run.sh /
+COPY gammu_mqtt.py /app/
+COPY gammu-config /etc/gammu-smsdrc
+
+RUN chmod a+x /run.sh
 
 WORKDIR /app
-COPY gammu_mqtt.py /app/gammu_mqtt.py
 
-CMD ["python", "/app/gammu_mqtt.py"]
+CMD [ "/run.sh" ]
