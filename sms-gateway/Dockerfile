@@ -5,7 +5,6 @@ RUN apt-get update && \
     pip install paho-mqtt && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-COPY gammu_mqtt.py /app/gammu_mqtt.py
+COPY rootfs /
 
 CMD ["python", "/app/gammu_mqtt.py"]

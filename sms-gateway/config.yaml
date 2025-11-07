@@ -1,5 +1,16 @@
-mqtt_host: core-mosquitto
-mqtt_port: 1883
-mqtt_user: ""
-mqtt_password: ""
-serial_device: /dev/ttyUSB0
+name: "SMS Gateway"
+version: "1.0.0"
+slug: "sms-gateway"
+description: "SMS Gateway using Huawei modem (12d1:1506)"
+url: "https://github.com/nnar1o/ha/tree/main/sms-gateway"
+arch:
+  - armhf
+  - armv7
+  - aarch64
+  - amd64
+  - i386
+startup: application
+boot: auto
+usb: true
+devices:
+  - /dev/ttyUSB0
