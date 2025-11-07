@@ -215,14 +215,31 @@ def check_inbox(client):
         for sms in sms_messages[1:]:  # Skip first empty element
             lines = sms.strip().splitlines()
             number = None
-            text = None
+            text_lines = []
+            in_text_section = False
             
             for line in lines:
                 if "Number" in line and ":" in line:
                     number = line.split(":", 1)[1].strip().strip('"')
                 elif line.strip().startswith("Text") and ":" in line:
-                    # Text might span multiple lines, get everything after first colon
-                    text = line.split(":", 1)[1].strip()
+                    # Start of text section - get text after colon
+                    first_text = line.split(":", 1)[1].strip()
+                    if first_text:
+                        text_lines.append(first_text)
+                    in_text_section = True
+                elif in_text_section:
+                    # Continue capturing text until we hit another field
+                    # Fields typically start with a capital letter followed by spaces and colon
+                    if ":" in line and line.split(":")[0].strip().replace(" ", "").isalpha():
+                        # Looks like a new field, stop capturing text
+                        in_text_section = False
+                    else:
+                        # Part of multi-line text
+                        stripped = line.strip()
+                        if stripped:
+                            text_lines.append(stripped)
+            
+            text = " ".join(text_lines) if text_lines else None
             
             if number and text:
                 logger.info(f"Received SMS from {number}")

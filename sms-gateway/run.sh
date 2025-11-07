@@ -58,7 +58,7 @@ bashio::log.info "Modem device found: ${SERIAL_DEVICE}"
 
 # Test gammu connection
 bashio::log.info "Testing gammu connection..."
-if gammu --config /root/.gammurc identify 2>&1 | grep -qE "(Manufacturer|Model|IMEI|Phone)"; then
+if gammu --config /root/.gammurc identify 2>&1 | grep -qE "(Manufacturer|Model|IMEI)"; then
     bashio::log.info "Gammu connection successful!"
     gammu --config /root/.gammurc identify 2>&1 | head -3 | while read line; do
         bashio::log.info "  $line"
