@@ -20,5 +20,5 @@ RUN pip3 install --no-cache-dir \
 COPY rootfs /
 WORKDIR /app
 
-# Set version in version.txt
-RUN echo "1.0.3" > /app/version.txt
+# Set version
+RUN echo "1.0.4" > /app/version.txt
