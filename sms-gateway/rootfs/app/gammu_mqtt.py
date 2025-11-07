@@ -19,6 +19,14 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
+def get_version():
+    """Get version from version.txt file"""
+    try:
+        with open('/app/version.txt', 'r') as f:
+            return f.read().strip()
+    except:
+        return "unknown"
+
 # Constants for modem retry logic
 MAX_RETRIES = 5
 RETRY_DELAY = 5  # seconds
@@ -361,7 +369,16 @@ def register_ha_service():
 
 def main():
     """Main application loop"""
-    _LOGGER.info(f"Starting SMS Gateway with device: {DEVICE}")
+    version = get_version()
+    
+    # Startup banner
+    _LOGGER.info("=" * 60)
+    _LOGGER.info(f"SMS Gateway v{version} starting...")
+    _LOGGER.info(f"Python version: {sys.version}")
+    _LOGGER.info(f"Gammu version: {gammu.Version()}")
+    _LOGGER.info("=" * 60)
+    
+    _LOGGER.info(f"Device: {DEVICE}")
     _LOGGER.info(f"Debug mode: {DEBUG}")
     _LOGGER.info(f"Notifications on receive: {NOTIFICATION_ON_RECEIVE}")
     _LOGGER.info(f"MQTT Broker: {MQTT_HOST}:{MQTT_PORT}")
