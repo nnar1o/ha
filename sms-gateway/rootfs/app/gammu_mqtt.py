@@ -13,6 +13,7 @@ from datetime import datetime
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[
         logging.StreamHandler(sys.stdout)
     ]
@@ -81,12 +82,11 @@ def log_sms_received(number, message):
     _LOGGER.info(f"Message: {message}")
 
 def log_sms_sent(number, message, success=True):
-    """Log detailed information about sent SMS"""
-    status = "Sent Successfully" if success else "Send Failed"
-    level = _LOGGER.info if success else _LOGGER.error
-    level(f"SMS {status} - To: {number}")
-    level(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    level(f"Message: {message}")
+    """Log SMS sending attempt with timestamp"""
+    status = "Successfully sent" if success else "Failed to send"
+    _LOGGER.info(f"SMS {status} - To: {number}")
+    _LOGGER.info(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    _LOGGER.info(f"Message: {message}")
 
 def connect_modem():
     """Connect to modem with retry logic"""
@@ -225,42 +225,55 @@ def check_modem_status():
             )
         return False
 
-def on_connect(client, userdata, flags, rc, properties=None):
-    """MQTT connection callback"""
-    if rc == 0:
-        _LOGGER.info("Connected to MQTT broker")
-        client.subscribe(OUTBOX_TOPIC)
-        _LOGGER.info(f"Subscribed to {OUTBOX_TOPIC}")
-    else:
-        _LOGGER.error(f"Failed to connect to MQTT broker, return code: {rc}")
-
-def on_message(client, userdata, msg):
-    """MQTT message callback for sending SMS"""
+def send_sms(number, message):
+    """Send SMS with proper logging"""
     try:
-        payload = json.loads(msg.payload)
-        number = payload["number"]
-        text = payload["text"]
-        
-        _LOGGER.info(f"Sending SMS to {number}")
+        _LOGGER.info(f"Attempting to send SMS to {number} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         result = subprocess.run(
-            ["gammu", "--device", DEVICE, "sendsms", "TEXT", number, "-text", text],
+            ["gammu", "--device", DEVICE, "sendsms", "TEXT", number, "-text", message],
             capture_output=True,
             text=True,
             timeout=30
         )
         
         success = result.returncode == 0
-        log_sms_sent(number, text, success)
+        log_sms_sent(number, message, success)
         
         if not success:
-            _LOGGER.error(f"Gammu error: {result.stderr}")
+            _LOGGER.error(f"Failed to send SMS: {result.stderr}")
+        
+        return success
+    except Exception as e:
+        _LOGGER.error(f"Failed to send SMS: {str(e)}")
+        log_sms_sent(number, message, success=False)
+        return False
+
+def on_connect(client, userdata, flags, rc, properties=None):
+    """Log MQTT connection status"""
+    if rc == 0:
+        _LOGGER.info(f"Connected to MQTT broker successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        client.subscribe(OUTBOX_TOPIC)
+        _LOGGER.info(f"Subscribed to {OUTBOX_TOPIC}")
+    else:
+        _LOGGER.error(f"Failed to connect to MQTT broker, return code: {rc}")
+
+def on_message(client, userdata, msg):
+    """Log and process incoming MQTT messages"""
+    _LOGGER.info(f"MQTT message received on {msg.topic} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    try:
+        payload = json.loads(msg.payload.decode())
+        number = payload["number"]
+        text = payload["text"]
+        
+        _LOGGER.info(f"Processing message to: {number}")
+        send_sms(number, text)
             
     except json.JSONDecodeError as e:
-        _LOGGER.error(f"Invalid JSON in MQTT message: {e}")
+        _LOGGER.error(f"Error processing message: Invalid JSON in MQTT message: {e}")
     except KeyError as e:
-        _LOGGER.error(f"Missing required field in MQTT message: {e}")
+        _LOGGER.error(f"Error processing message: Missing required field in MQTT message: {e}")
     except Exception as e:
-        _LOGGER.error(f"Error sending SMS: {e}")
+        _LOGGER.error(f"Error processing message: {str(e)}")
 
 def check_inbox(client):
     """Check for incoming SMS messages"""
@@ -374,8 +387,15 @@ def main():
     # Startup banner
     _LOGGER.info("=" * 60)
     _LOGGER.info(f"SMS Gateway v{version} starting...")
-    _LOGGER.info(f"Python version: {sys.version}")
-    _LOGGER.info(f"Gammu version: {gammu.Version()}")
+    _LOGGER.info(f"Python version: {sys.version.split()[0]}")
+    _LOGGER.info(f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    try:
+        _LOGGER.info(f"Gammu version: {gammu.Version()}")
+    except ImportError:
+        _LOGGER.error("Failed to import gammu module")
+        sys.exit(1)
+    
     _LOGGER.info("=" * 60)
     
     _LOGGER.info(f"Device: {DEVICE}")
