@@ -14,3 +14,11 @@ boot: auto
 usb: true
 devices:
   - /dev/ttyUSB0
+options:
+  device: "/dev/ttyUSB0"
+  debug: false
+  notification_on_receive: true
+schema:
+  device: "str"
+  debug: "bool"
+  notification_on_receive: "bool"
