@@ -22,6 +22,9 @@ INBOX_TOPIC = 'sms-gateway/inbox'
 OUTBOX_TOPIC = 'sms-gateway/outbox'
 STATUS_TOPIC = 'sms-gateway/status'
 
+# Constants
+MAX_LOG_MESSAGE_LENGTH = 100  # Maximum message length to log for privacy
+
 # Message queue for reliable delivery
 message_queue = Queue()
 
@@ -167,7 +170,7 @@ def message_sender_worker(client):
             # Publish send status
             status_msg = {
                 "number": number,
-                "text": text[:100],  # Truncate for privacy
+                "text": text[:MAX_LOG_MESSAGE_LENGTH],  # Truncate for privacy
                 "status": "sent" if success else "failed",
                 "timestamp": get_timestamp()
             }
@@ -281,7 +284,7 @@ def main():
         
         if result.returncode == 0:
             logger.info("Gammu configuration OK")
-            logger.info(f"Modem info: {result.stdout.split(chr(10))[0]}")
+            logger.info(f"Modem info: {result.stdout.split(os.linesep)[0]}")
         else:
             logger.warning("Could not identify modem, continuing anyway...")
             
