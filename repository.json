@@ -1,1 +1,5 @@
-{\n  "name": "NNAR1O Home Assistant Add-ons Repository",\n  "url": "https://github.com/nnar1o/ha",\n  "maintainer": "nnar1o",\n  "description": "Repozytorium dodatków dla Home Assistant, w tym sms-gateway do obsługi SMS przez modem Huawei z wsparciem MQTT."\n}
+{
+  "name": "NNAR1O Home Assistant Add-ons",
+  "url": "https://github.com/nnar1o/ha",
+  "maintainer": "nnar1o <github@nnar1o>"
+}
