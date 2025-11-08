@@ -1,27 +1,13 @@
 ARG BUILD_FROM
 FROM ${BUILD_FROM}
 
-# Fix ENV format
 ENV LANG=C.UTF-8
 
-# Install required packages
-RUN apk add --no-cache \
-    gammu \
-    gammu-dev \
-    gcc \
-    musl-dev \
-    python3-dev
-
-# Install Python packages
-RUN pip3 install --no-cache-dir \
-    paho-mqtt \
-    python-gammu
+RUN apk add --no-cache gammu gammu-dev gcc musl-dev python3-dev
+RUN pip3 install --no-cache-dir paho-mqtt python-gammu
 
 COPY rootfs /
 WORKDIR /app
 
-# Set version and permissions
-RUN echo "1.0.5" > /app/version.txt && \
-    chmod +x /app/run.sh
-
-ENTRYPOINT ["/init"]
+RUN echo "1.0.6" > /app/version.txt && \
+    chmod +x /etc/services.d/sms-gateway/run
