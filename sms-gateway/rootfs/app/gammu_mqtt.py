@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "1.0.6"
+VERSION = "1.0.10"
 
 def log_system_info():
     """Log detailed system information"""
