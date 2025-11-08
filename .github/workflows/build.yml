@@ -1,0 +1,54 @@
+name: Build and Test
+
+on:
+  push:
+    paths:
+      - 'sms-gateway/**'
+  pull_request:
+    paths:
+      - 'sms-gateway/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Check directory structure
+        run: |
+          required_files=(
+            "sms-gateway/Dockerfile"
+            "sms-gateway/config.yaml"
+            "sms-gateway/rootfs/app/gammu_mqtt.py"
+            "sms-gateway/rootfs/etc/services.d/sms-gateway/run"
+          )
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "Missing required file: $file"
+              exit 1
+            fi
+          done
+      
+      - name: Check Python syntax
+        run: python3 -m py_compile sms-gateway/rootfs/app/gammu_mqtt.py
+      
+      - name: Check version consistency
+        run: |
+          version_config=$(grep "version:" sms-gateway/config.yaml | cut -d'"' -f2)
+          version_python=$(grep "VERSION =" sms-gateway/rootfs/app/gammu_mqtt.py | cut -d'"' -f2)
+          if [ "$version_config" != "$version_python" ]; then
+            echo "Version mismatch between config.yaml ($version_config) and gammu_mqtt.py ($version_python)"
+            exit 1
+          fi
+      
+      - name: Build Docker image
+        run: |
+          cd sms-gateway
+          docker build -t test-build .
+
+      - name: Test Docker image
+        run: |
+          if ! docker run --rm test-build python3 -c "import requests, paho.mqtt, gammu"; then
+            echo "Missing required Python modules"
+            exit 1
+          fi
