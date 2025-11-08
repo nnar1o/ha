@@ -9,18 +9,47 @@ import requests
 import gammu
 from datetime import datetime, timezone
 
-# Setup logging
+# Configure logging with timestamp and proper format
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Always use DEBUG level
     format='%(asctime)s UTC - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "1.0.4"
+VERSION = "1.0.5"
+
+def log_system_info():
+    """Log detailed system information"""
+    _LOGGER.debug("=" * 60)
+    _LOGGER.debug(f"SMS Gateway v{VERSION} starting...")
+    _LOGGER.debug(f"Start time (UTC): {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
+    _LOGGER.debug(f"Python version: {sys.version}")
+    _LOGGER.debug(f"Current working directory: {os.getcwd()}")
+    _LOGGER.debug(f"Script path: {os.path.realpath(__file__)}")
+    _LOGGER.debug("Environment variables:")
+    for key, value in os.environ.items():
+        if not any(secret in key.lower() for secret in ['password', 'token', 'secret']):
+            _LOGGER.debug(f"  {key}: {value}")
+    _LOGGER.debug("=" * 60)
+
+def log_device_info():
+    """Log modem and device information"""
+    _LOGGER.debug("=" * 60)
+    _LOGGER.debug("Device Information:")
+    _LOGGER.debug(f"Device path: {DEVICE}")
+    try:
+        result = subprocess.run(
+            ["gammu", "--identify"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        _LOGGER.debug("Gammu identify output:")
+        _LOGGER.debug(result.stdout)
+    except Exception as e:
+        _LOGGER.error(f"Failed to get device info: {e}")
+    _LOGGER.debug("=" * 60)
 
 def get_utc_time():
     """Get current UTC time in YYYY-MM-DD HH:MM:SS format"""
@@ -251,9 +280,14 @@ def check_modem_status():
         return False
 
 def send_sms(number, message):
-    """Send SMS with proper logging"""
+    """Send SMS with enhanced logging"""
+    _LOGGER.debug("=" * 40)
+    _LOGGER.debug("Sending SMS:")
+    _LOGGER.debug(f"To: {number}")
+    _LOGGER.debug(f"Message length: {len(message)}")
+    _LOGGER.debug(f"Time (UTC): {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
+    
     try:
-        _LOGGER.info(f"Attempting to send SMS to {number} at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
         result = subprocess.run(
             ["gammu", "--device", DEVICE, "sendsms", "TEXT", number, "-text", message],
             capture_output=True,
@@ -261,17 +295,20 @@ def send_sms(number, message):
             timeout=30
         )
         
-        success = result.returncode == 0
-        log_sms_sent(number, message, success)
-        
-        if not success:
-            _LOGGER.error(f"Failed to send SMS: {result.stderr}")
-        
-        return success
+        if result.returncode == 0:
+            _LOGGER.debug("SMS sent successfully")
+            _LOGGER.debug(f"Gammu output: {result.stdout}")
+        else:
+            _LOGGER.error("SMS sending failed")
+            _LOGGER.error(f"Return code: {result.returncode}")
+            _LOGGER.error(f"Error output: {result.stderr}")
+            
+        return result.returncode == 0
     except Exception as e:
-        _LOGGER.error(f"Failed to send SMS: {str(e)}")
-        log_sms_sent(number, message, success=False)
+        _LOGGER.error(f"Exception while sending SMS: {str(e)}")
         return False
+    finally:
+        _LOGGER.debug("=" * 40)
 
 def on_connect(client, userdata, flags, rc, properties=None):
     """Log MQTT connection status"""

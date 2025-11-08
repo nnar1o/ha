@@ -20,5 +20,8 @@ RUN pip3 install --no-cache-dir \
 COPY rootfs /
 WORKDIR /app
 
-# Set version
-RUN echo "1.0.4" > /app/version.txt
+# Set version and permissions
+RUN echo "1.0.5" > /app/version.txt && \
+    chmod +x /app/run.sh
+
+ENTRYPOINT ["/init"]
