@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bashio
+echo "Starting SMS Gateway v1.0.6 at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+cd /app
+python3 gammu_mqtt.py
