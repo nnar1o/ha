@@ -55,14 +55,15 @@ HUAWEI_MODEM_PATTERNS = [
 DEVICE_WAIT_TIMEOUT = 30  # seconds
 POLL_INTERVAL = 1  # seconds
 
-def run_command(cmd, timeout=10):
+def run_command(cmd, timeout=10, env=None):
     """Run a command and return output"""
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            env=env
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
@@ -239,17 +240,27 @@ def discover_serial_devices():
         devices.append(metadata)
         _LOGGER.info(f"Discovered device: {dev_path} (vendor: {metadata['vendor']}, product: {metadata['product']})")
     
-    # Also check /dev/serial/by-id/* if available
+    # Also check /dev/serial/by-id/* and associate with existing devices
     by_id_devices = glob.glob('/dev/serial/by-id/*')
-    for dev_path in by_id_devices:
+    for by_id_path in by_id_devices:
         # Resolve symlink to actual device
-        real_path = os.path.realpath(dev_path)
-        # Only add if not already in list
-        if not any(d['path'] == real_path for d in devices):
+        real_path = os.path.realpath(by_id_path)
+        # Check if this device is already in our list
+        found = False
+        for dev in devices:
+            if dev['path'] == real_path:
+                # Associate the by-id path with this device
+                dev['by_id_path'] = by_id_path
+                _LOGGER.debug(f"Associated by-id path {by_id_path} with {real_path}")
+                found = True
+                break
+        
+        if not found:
+            # Device not in list yet, add it
             metadata = get_device_info_from_path(real_path)
-            metadata['by_id_path'] = dev_path
+            metadata['by_id_path'] = by_id_path
             devices.append(metadata)
-            _LOGGER.info(f"Discovered device by-id: {dev_path} -> {real_path}")
+            _LOGGER.info(f"Discovered device by-id: {by_id_path} -> {real_path}")
     
     return devices
 
@@ -374,7 +385,8 @@ connection = {connection_type}
         _LOGGER.debug(f"Running: gammu --identify with {connection_type}")
         returncode, stdout, stderr = run_command(
             ['gammu', '--identify'],
-            timeout=15
+            timeout=15,
+            env=env
         )
         
         result['output'] = stdout
