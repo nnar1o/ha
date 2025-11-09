@@ -31,8 +31,12 @@ The add-on automatically detects Huawei modems in storage mode and switches them
 - Device metadata
 
 **Single Device**: If exactly one modem is detected, it's automatically selected.  
-**Multiple Devices**: Configure the `device` option in the add-on settings to specify which device to use.  
+**Multiple Devices**: When multiple serial devices are detected, the add-on automatically prefers HUAWEI devices. If a HUAWEI device is found, it will be auto-selected. Otherwise, configure the `device` option in the add-on settings to specify which device to use.  
 **No Device Found**: The add-on continues running and will retry modem detection.
+
+## Automatic Gammu Configuration
+
+The add-on automatically generates `/etc/gammurc` when a device is selected (either automatically or through configuration). The generated configuration includes the device path and fallback connection options (at115200, at9600, at) to ensure reliable modem communication.
 
 ## Configuration
 
