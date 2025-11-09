@@ -114,3 +114,146 @@ def get_logger(name):
         return setup_logger(name)
     
     return logger
+
+
+def status_modem(status, device=None, connection=None, **kwargs):
+    """
+    Write modem status to console (colored) and to JSON status file
+    
+    Args:
+        status: Status string ('connected', 'disconnected', 'error', etc.)
+        device: Device path (optional)
+        connection: Connection type (optional)
+        **kwargs: Additional key-value pairs to include in JSON
+    """
+    import json
+    import os
+    from datetime import datetime, timezone
+    
+    logger = get_logger('status')
+    
+    # Colored console output
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    if status == 'connected':
+        logger.info(f"✓ Modem Status: {status.upper()}")
+    elif status == 'disconnected':
+        logger.warning(f"⚠ Modem Status: {status.upper()}")
+    elif status == 'error':
+        logger.error(f"✗ Modem Status: {status.upper()}")
+    else:
+        logger.info(f"Modem Status: {status}")
+    
+    if device:
+        logger.info(f"  Device: {device}")
+    if connection:
+        logger.info(f"  Connection: {connection}")
+    for key, value in kwargs.items():
+        logger.info(f"  {key.replace('_', ' ').title()}: {value}")
+    
+    # Plain JSON status to file
+    status_data = {
+        'timestamp': timestamp,
+        'component': 'modem',
+        'status': status
+    }
+    if device:
+        status_data['device'] = device
+    if connection:
+        status_data['connection'] = connection
+    status_data.update(kwargs)
+    
+    try:
+        status_file = '/data/sms_gateway_status.json'
+        os.makedirs(os.path.dirname(status_file), exist_ok=True)
+        
+        # Read existing status if present
+        all_status = {}
+        if os.path.exists(status_file):
+            try:
+                with open(status_file, 'r') as f:
+                    all_status = json.load(f)
+            except:
+                pass
+        
+        # Update modem status
+        all_status['modem'] = status_data
+        
+        # Write back
+        with open(status_file, 'w') as f:
+            json.dump(all_status, f, indent=2)
+            
+    except Exception as e:
+        logger.debug(f"Failed to write modem status to file: {e}")
+
+
+def status_mqtt(status, broker=None, port=None, topic=None, **kwargs):
+    """
+    Write MQTT status to console (colored) and to JSON status file
+    
+    Args:
+        status: Status string ('connected', 'disconnected', 'error', etc.)
+        broker: MQTT broker hostname (optional)
+        port: MQTT broker port (optional)
+        topic: MQTT topic (optional)
+        **kwargs: Additional key-value pairs to include in JSON
+    """
+    import json
+    import os
+    from datetime import datetime, timezone
+    
+    logger = get_logger('status')
+    
+    # Colored console output
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    if status == 'connected':
+        logger.info(f"✓ MQTT Status: {status.upper()}")
+    elif status == 'disconnected':
+        logger.warning(f"⚠ MQTT Status: {status.upper()}")
+    elif status == 'error':
+        logger.error(f"✗ MQTT Status: {status.upper()}")
+    else:
+        logger.info(f"MQTT Status: {status}")
+    
+    if broker:
+        logger.info(f"  Broker: {broker}:{port if port else 1883}")
+    if topic:
+        logger.info(f"  Topic: {topic}")
+    for key, value in kwargs.items():
+        logger.info(f"  {key.replace('_', ' ').title()}: {value}")
+    
+    # Plain JSON status to file
+    status_data = {
+        'timestamp': timestamp,
+        'component': 'mqtt',
+        'status': status
+    }
+    if broker:
+        status_data['broker'] = broker
+    if port:
+        status_data['port'] = port
+    if topic:
+        status_data['topic'] = topic
+    status_data.update(kwargs)
+    
+    try:
+        status_file = '/data/sms_gateway_status.json'
+        os.makedirs(os.path.dirname(status_file), exist_ok=True)
+        
+        # Read existing status if present
+        all_status = {}
+        if os.path.exists(status_file):
+            try:
+                with open(status_file, 'r') as f:
+                    all_status = json.load(f)
+            except:
+                pass
+        
+        # Update MQTT status
+        all_status['mqtt'] = status_data
+        
+        # Write back
+        with open(status_file, 'w') as f:
+            json.dump(all_status, f, indent=2)
+            
+    except Exception as e:
+        logger.debug(f"Failed to write MQTT status to file: {e}")

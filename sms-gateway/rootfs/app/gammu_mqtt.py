@@ -7,14 +7,14 @@ import sys
 import requests
 import gammu
 import traceback
+import logging
 from datetime import datetime, timezone
 
 # Import custom logger
 try:
-    from logger import get_logger
+    from logger import get_logger, status_modem, status_mqtt
     _LOGGER = get_logger(__name__)
 except ImportError:
-    import logging
     # Configure logging with timestamp and proper format
     logging.basicConfig(
         level=logging.DEBUG,  # Always use DEBUG level
@@ -22,6 +22,11 @@ except ImportError:
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     _LOGGER = logging.getLogger(__name__)
+    # Fallback status functions if logger module not available
+    def status_modem(*args, **kwargs):
+        pass
+    def status_mqtt(*args, **kwargs):
+        pass
 
 VERSION = "1.0.14"
 
@@ -213,6 +218,24 @@ def connect_modem():
             state_machine.Init()
             
             _LOGGER.info("Successfully connected to modem")
+            
+            # Use status_modem helper to log success
+            try:
+                # Try to get connection info from gammurc
+                connection_type = 'unknown'
+                try:
+                    with open('/etc/gammurc', 'r') as f:
+                        for line in f:
+                            if 'connection' in line.lower() and '=' in line:
+                                connection_type = line.split('=')[1].strip()
+                                break
+                except:
+                    pass
+                
+                status_modem('connected', device=DEVICE, connection=connection_type)
+            except:
+                pass  # Don't fail if status helper fails
+            
             return state_machine
             
         except gammu.ERR_DEVICENOTEXIST as e:
@@ -233,8 +256,12 @@ def connect_modem():
                 pass
             
             if attempt == MAX_RETRIES - 1:
-                # Last attempt failed, publish diagnostics
+                # Last attempt failed, publish diagnostics and update status
                 publish_init_error_diagnostics(error_msg, traceback.format_exc())
+                try:
+                    status_modem('error', device=DEVICE, error='device_not_found')
+                except:
+                    pass
             elif attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY)
                 
@@ -274,8 +301,12 @@ def connect_modem():
                 _LOGGER.error(f"Failed to write to /tmp/gammu.log: {log_e}")
             
             if attempt == MAX_RETRIES - 1:
-                # Last attempt failed, publish diagnostics
+                # Last attempt failed, publish diagnostics and update status
                 publish_init_error_diagnostics(error_msg, traceback.format_exc())
+                try:
+                    status_modem('error', device=DEVICE, error=type(e).__name__)
+                except:
+                    pass
             elif attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY)
                 
@@ -435,8 +466,18 @@ def on_connect(client, userdata, flags, rc, properties=None):
         _LOGGER.info(f"Connected to MQTT broker successfully at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
         client.subscribe(OUTBOX_TOPIC)
         _LOGGER.info(f"Subscribed to {OUTBOX_TOPIC}")
+        
+        # Use status_mqtt helper to log connection
+        try:
+            status_mqtt('connected', broker=MQTT_HOST, port=MQTT_PORT, topic=OUTBOX_TOPIC)
+        except:
+            pass  # Don't fail if status helper fails
     else:
         _LOGGER.error(f"Failed to connect to MQTT broker, return code: {rc}")
+        try:
+            status_mqtt('error', broker=MQTT_HOST, port=MQTT_PORT, error_code=rc)
+        except:
+            pass
 
 def on_message(client, userdata, msg):
     """Log and process incoming MQTT messages"""
