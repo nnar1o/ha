@@ -1,7 +1,7 @@
 name: "SMS Gateway"
 version: "1.0.10"
 slug: "sms-gateway"
-description: "SMS Gateway using Huawei modem (12d1:1506) with enhanced logging"
+description: "SMS Gateway using Huawei modem (12d1:1506) with automatic MQTT configuration"
 url: "https://github.com/nnar1o/ha/tree/main/sms-gateway"
 arch:
   - armhf
