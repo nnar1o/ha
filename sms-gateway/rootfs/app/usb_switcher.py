@@ -9,7 +9,6 @@ import sys
 import time
 import json
 import subprocess
-import logging
 import glob
 from pathlib import Path
 from datetime import datetime, timezone
@@ -21,13 +20,26 @@ try:
 except ImportError:
     PYUDEV_AVAILABLE = False
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s UTC - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-_LOGGER = logging.getLogger(__name__)
+# Import custom logger and gammu_probe
+try:
+    from logger import get_logger
+    _LOGGER = get_logger(__name__)
+except ImportError:
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s UTC - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    _LOGGER = logging.getLogger(__name__)
+
+# Import gammu_probe
+try:
+    from gammu_probe import probe_all_connections, save_probe_log
+    GAMMU_PROBE_AVAILABLE = True
+except ImportError:
+    GAMMU_PROBE_AVAILABLE = False
+    _LOGGER.warning("gammu_probe module not available, connection testing disabled")
 
 if PYUDEV_AVAILABLE:
     _LOGGER.debug("pyudev is available for enhanced device detection")
@@ -317,222 +329,11 @@ def is_huawei_device(device_metadata):
     
     return False
 
-def generate_gammurc(device_path):
-    """Generate /etc/gammurc with device and fallback connections"""
+def generate_gammurc(device_path, connection='at115200'):
+    """Generate /etc/gammurc with specified connection as primary"""
     gammurc_path = '/etc/gammurc'
     
-    # Gammurc content with device and fallback connections
-    gammurc_content = f"""[gammu]
-port = {device_path}
-connection = at115200
-
-[gammu1]
-port = {device_path}
-connection = at9600
-
-[gammu2]
-port = {device_path}
-connection = at
-"""
-    
-    try:
-        with open(gammurc_path, 'w') as f:
-            f.write(gammurc_content)
-        _LOGGER.info(f"Successfully generated {gammurc_path} for device {device_path}")
-        _LOGGER.debug(f"Gammurc content:\n{gammurc_content}")
-        return True
-    except Exception as e:
-        _LOGGER.error(f"Failed to generate {gammurc_path}: {e}")
-        return False
-
-def test_gammu_connection(device_path, connection_type, section_name='gammu'):
-    """Test a gammu connection and return success status and output
-    
-    Args:
-        device_path: Path to the device (e.g., /dev/ttyUSB0)
-        connection_type: Connection string (e.g., 'at115200', 'at9600', 'at')
-        section_name: Section name for gammurc
-    
-    Returns:
-        dict with keys: success (bool), output (str), error (str), connection (str)
-    """
-    result = {
-        'success': False,
-        'output': '',
-        'error': '',
-        'connection': connection_type,
-        'section': section_name
-    }
-    
-    # Create a temporary gammurc for this test
-    temp_gammurc = f'/tmp/gammurc_test_{section_name}'
-    gammurc_content = f"""[{section_name}]
-port = {device_path}
-connection = {connection_type}
-"""
-    
-    try:
-        with open(temp_gammurc, 'w') as f:
-            f.write(gammurc_content)
-        
-        _LOGGER.debug(f"Testing connection {connection_type} with section [{section_name}]")
-        
-        # Set environment variable for this test
-        env = os.environ.copy()
-        env['GAMMURC'] = temp_gammurc
-        
-        # Try gammu --identify first
-        _LOGGER.debug(f"Running: gammu --identify with {connection_type}")
-        returncode, stdout, stderr = run_command(
-            ['gammu', '--identify'],
-            timeout=15,
-            env=env
-        )
-        
-        result['output'] = stdout
-        result['error'] = stderr
-        
-        if returncode == 0:
-            _LOGGER.info(f"✓ Connection {connection_type} successful!")
-            _LOGGER.debug(f"Output: {stdout[:200]}")
-            result['success'] = True
-            return result
-        else:
-            _LOGGER.debug(f"✗ Connection {connection_type} failed. Error: {stderr[:200]}")
-            
-    except Exception as e:
-        _LOGGER.debug(f"✗ Exception testing connection {connection_type}: {e}")
-        result['error'] = str(e)
-    finally:
-        # Clean up temp file
-        try:
-            if os.path.exists(temp_gammurc):
-                os.remove(temp_gammurc)
-        except:
-            pass
-    
-    return result
-
-def test_all_gammu_connections(device_path):
-    """Test all gammu connection types and return diagnostics
-    
-    Returns:
-        dict with keys: successful_connection, diagnostics, all_results
-    """
-    _LOGGER.info("=" * 60)
-    _LOGGER.info("Testing gammu connections...")
-    _LOGGER.info(f"Device: {device_path}")
-    _LOGGER.info("=" * 60)
-    
-    connections_to_test = [
-        ('at115200', 'gammu'),
-        ('at9600', 'gammu1'),
-        ('at', 'gammu2')
-    ]
-    
-    diagnostics = {
-        'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC'),
-        'device': device_path,
-        'tested_connections': [],
-        'successful_connection': None,
-        'all_failed': False
-    }
-    
-    all_results = []
-    successful_connection = None
-    
-    for connection_type, section_name in connections_to_test:
-        result = test_gammu_connection(device_path, connection_type, section_name)
-        all_results.append(result)
-        
-        diagnostics['tested_connections'].append({
-            'connection': connection_type,
-            'section': section_name,
-            'success': result['success'],
-            'error': result['error'][:500] if result['error'] else None  # Truncate long errors
-        })
-        
-        if result['success'] and not successful_connection:
-            successful_connection = {
-                'connection': connection_type,
-                'section': section_name,
-                'output': result['output']
-            }
-            diagnostics['successful_connection'] = connection_type
-            _LOGGER.info(f"Found working connection: {connection_type}")
-            # Don't break - log all attempts for diagnostics
-    
-    if not successful_connection:
-        diagnostics['all_failed'] = True
-        _LOGGER.warning("All gammu connection attempts failed")
-    
-    _LOGGER.info("=" * 60)
-    
-    return {
-        'successful_connection': successful_connection,
-        'diagnostics': diagnostics,
-        'all_results': all_results
-    }
-
-def save_diagnostics(diagnostics, output_path='/data/sms_gateway_diagnostics.json'):
-    """Save diagnostics to JSON file"""
-    try:
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        with open(output_path, 'w') as f:
-            json.dump(diagnostics, f, indent=2)
-        _LOGGER.info(f"Saved diagnostics to {output_path}")
-        return True
-    except Exception as e:
-        _LOGGER.error(f"Failed to save diagnostics to {output_path}: {e}")
-        return False
-
-def save_gammu_log(all_results, device_path, log_path='/tmp/gammu.log'):
-    """Save detailed gammu test log with all outputs"""
-    try:
-        with open(log_path, 'w') as f:
-            f.write("=" * 60 + "\n")
-            f.write("Gammu Connection Test Log\n")
-            f.write(f"Timestamp: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
-            f.write(f"Device: {device_path}\n")
-            f.write("=" * 60 + "\n\n")
-            
-            for result in all_results:
-                f.write(f"Connection: {result['connection']} (section: [{result['section']}])\n")
-                f.write(f"Success: {result['success']}\n")
-                f.write("-" * 40 + "\n")
-                
-                if result['output']:
-                    f.write("Output:\n")
-                    f.write(result['output'])
-                    f.write("\n")
-                
-                if result['error']:
-                    f.write("Error:\n")
-                    f.write(result['error'])
-                    f.write("\n")
-                
-                f.write("=" * 60 + "\n\n")
-        
-        _LOGGER.info(f"Saved detailed gammu log to {log_path}")
-        return True
-    except Exception as e:
-        _LOGGER.error(f"Failed to save gammu log to {log_path}: {e}")
-        return False
-
-def generate_final_gammurc(device_path, successful_connection):
-    """Generate final /etc/gammurc with successful connection as primary"""
-    gammurc_path = '/etc/gammurc'
-    
-    if successful_connection:
-        # Use successful connection as primary
-        connection = successful_connection['connection']
-        _LOGGER.info(f"Generating final gammurc with successful connection: {connection}")
-    else:
-        # Fallback to at115200 if no successful test
-        connection = 'at115200'
-        _LOGGER.warning(f"No successful connection found, using default: {connection}")
-    
-    # Always include all three connection types for fallback
+    # Gammurc content with specified connection as primary and fallbacks
     gammurc_content = f"""[gammu]
 port = {device_path}
 connection = {connection}
@@ -549,17 +350,96 @@ connection = at
     try:
         with open(gammurc_path, 'w') as f:
             f.write(gammurc_content)
-        _LOGGER.info(f"Successfully generated {gammurc_path}")
+        _LOGGER.info(f"Successfully generated {gammurc_path} for device {device_path} with connection {connection}")
         _LOGGER.debug(f"Gammurc content:\n{gammurc_content}")
         return True
     except Exception as e:
         _LOGGER.error(f"Failed to generate {gammurc_path}: {e}")
         return False
 
+def publish_diagnostics_to_mqtt(diagnostics, device_info=None):
+    """
+    Publish diagnostics to MQTT topic sms-gateway/diagnostics
+    
+    Args:
+        diagnostics: Diagnostics dict from gammu_probe
+        device_info: Optional device information dict
+    """
+    try:
+        import paho.mqtt.client as mqtt
+        
+        # Load MQTT config from options
+        mqtt_host = None
+        mqtt_port = 1883
+        mqtt_user = ''
+        mqtt_password = ''
+        
+        try:
+            with open('/data/options.json', 'r') as f:
+                options = json.load(f)
+                mqtt_config = options.get('mqtt', {})
+                mqtt_host = mqtt_config.get('broker', 'core-mosquitto')
+                mqtt_port = mqtt_config.get('port', 1883)
+                mqtt_user = mqtt_config.get('username', '')
+                mqtt_password = mqtt_config.get('password', '')
+        except Exception as e:
+            _LOGGER.debug(f"Could not load MQTT config from options: {e}")
+            mqtt_host = os.getenv('MQTT_HOST', 'core-mosquitto')
+            mqtt_port = int(os.getenv('MQTT_PORT', '1883'))
+            mqtt_user = os.getenv('MQTT_USER', '')
+            mqtt_password = os.getenv('MQTT_PASSWORD', '')
+        
+        if not mqtt_host:
+            _LOGGER.warning("MQTT host not configured, skipping diagnostics publication")
+            return
+        
+        # Add device info to diagnostics if provided
+        if device_info:
+            diagnostics['device_info'] = device_info
+        
+        # Create MQTT client and publish
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        if mqtt_user:
+            client.username_pw_set(mqtt_user, mqtt_password)
+        
+        _LOGGER.info(f"Publishing diagnostics to MQTT: {mqtt_host}:{mqtt_port}")
+        client.connect(mqtt_host, mqtt_port, 60)
+        client.loop_start()
+        
+        # Publish with retain flag
+        result = client.publish('sms-gateway/diagnostics', json.dumps(diagnostics), retain=True)
+        
+        # Wait a bit for publish to complete
+        time.sleep(1)
+        client.loop_stop()
+        client.disconnect()
+        
+        if result.rc == 0:
+            _LOGGER.info("Successfully published diagnostics to MQTT topic: sms-gateway/diagnostics")
+        else:
+            _LOGGER.warning(f"Failed to publish diagnostics to MQTT, return code: {result.rc}")
+        
+    except Exception as e:
+        _LOGGER.error(f"Failed to publish diagnostics to MQTT: {e}")
+        import traceback
+        _LOGGER.debug(traceback.format_exc())
+
+def save_diagnostics(diagnostics, output_path='/data/sms_gateway_diagnostics.json'):
+    """Save diagnostics to JSON file"""
+    try:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, 'w') as f:
+            json.dump(diagnostics, f, indent=2)
+        _LOGGER.info(f"Saved diagnostics to {output_path}")
+        return True
+    except Exception as e:
+        _LOGGER.error(f"Failed to save diagnostics to {output_path}: {e}")
+        return False
+
 def main():
     """Main USB switcher logic"""
     _LOGGER.info("=" * 60)
-    _LOGGER.info("USB Mode Switcher for SMS Gateway v1.0.13")
+    _LOGGER.info("USB Mode Switcher for SMS Gateway v1.0.14")
     _LOGGER.info("=" * 60)
     
     # Load device from options if configured
@@ -668,29 +548,46 @@ def main():
         os.environ['DEVICE'] = device_to_use
         _LOGGER.info(f"Set DEVICE environment variable to: {device_to_use}")
         
-        # Test gammu connections and generate diagnostics
+        # Test gammu connections using gammu_probe module
         _LOGGER.info("Step 4: Testing gammu connections and generating configuration...")
-        test_results = test_all_gammu_connections(device_to_use)
         
-        diagnostics = test_results['diagnostics']
-        diagnostics['selection_reason'] = selection_reason
-        diagnostics['configured_device'] = configured_device
-        
-        # Save diagnostics
-        save_diagnostics(diagnostics)
-        
-        # Save detailed gammu log
-        save_gammu_log(test_results['all_results'], device_to_use)
-        
-        # Generate final gammurc with successful connection
-        successful_conn = test_results['successful_connection']
-        generate_final_gammurc(device_to_use, successful_conn)
-        
-        if successful_conn:
-            _LOGGER.info(f"✓ Gammu successfully initialized with connection: {successful_conn['connection']}")
+        if GAMMU_PROBE_AVAILABLE:
+            test_results = probe_all_connections(device_to_use, ['at115200', 'at9600', 'at'])
+            
+            diagnostics = test_results['diagnostics']
+            diagnostics['selection_reason'] = selection_reason
+            diagnostics['configured_device'] = configured_device
+            
+            # Save diagnostics
+            save_diagnostics(diagnostics)
+            
+            # Save detailed gammu log
+            save_probe_log(test_results['all_results'], device_to_use)
+            
+            # Generate final gammurc with successful connection
+            successful_conn = test_results['successful_connection']
+            if successful_conn:
+                generate_gammurc(device_to_use, successful_conn)
+                _LOGGER.info(f"✓ Gammu successfully initialized with connection: {successful_conn}")
+                
+                # Publish success diagnostics to MQTT
+                publish_diagnostics_to_mqtt(diagnostics, {
+                    'vendor': selected_dev.get('vendor', 'unknown') if len(devices) > 0 else 'unknown',
+                    'product': selected_dev.get('product', 'unknown') if len(devices) > 0 else 'unknown',
+                    'model': selected_dev.get('model', 'unknown') if len(devices) > 0 else 'unknown'
+                })
+            else:
+                # No working connection found - generate with default but still publish diagnostics
+                generate_gammurc(device_to_use, 'at115200')
+                _LOGGER.warning("⚠ All gammu connection tests failed. gammurc generated with default settings.")
+                _LOGGER.warning("Check /tmp/gammu.log and /data/sms_gateway_diagnostics.json for details")
+                
+                # Publish failure diagnostics to MQTT
+                publish_diagnostics_to_mqtt(diagnostics)
         else:
-            _LOGGER.warning("⚠ All gammu connection tests failed. gammurc generated with default settings.")
-            _LOGGER.warning("Check /tmp/gammu.log and /data/sms_gateway_diagnostics.json for details")
+            # Fallback if gammu_probe not available - use old method
+            _LOGGER.warning("gammu_probe not available, generating gammurc with default settings")
+            generate_gammurc(device_to_use, 'at115200')
     
     # Step 8: Exec gammu_mqtt.py to replace this process
     _LOGGER.info("=" * 60)

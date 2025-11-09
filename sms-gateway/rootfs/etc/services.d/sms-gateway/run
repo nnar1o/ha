@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bashio
-echo "Starting SMS Gateway v1.0.13 at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+echo "Starting SMS Gateway v1.0.14 at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 
 # Fetch MQTT configuration from Home Assistant using bashio::services
 bashio::log.info "Fetching MQTT configuration from Home Assistant..."

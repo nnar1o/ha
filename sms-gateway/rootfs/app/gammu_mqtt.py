@@ -3,21 +3,27 @@ import paho.mqtt.client as mqtt
 import subprocess
 import time
 import json
-import logging
 import sys
 import requests
 import gammu
+import traceback
 from datetime import datetime, timezone
 
-# Configure logging with timestamp and proper format
-logging.basicConfig(
-    level=logging.DEBUG,  # Always use DEBUG level
-    format='%(asctime)s UTC - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-_LOGGER = logging.getLogger(__name__)
+# Import custom logger
+try:
+    from logger import get_logger
+    _LOGGER = get_logger(__name__)
+except ImportError:
+    import logging
+    # Configure logging with timestamp and proper format
+    logging.basicConfig(
+        level=logging.DEBUG,  # Always use DEBUG level
+        format='%(asctime)s UTC - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    _LOGGER = logging.getLogger(__name__)
 
-VERSION = "1.0.13"
+VERSION = "1.0.14"
 
 def log_system_info():
     """Log detailed system information"""
@@ -145,24 +151,134 @@ def log_sms_sent(number, message, success=True):
     _LOGGER.info(f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
     _LOGGER.info(f"Message: {message}")
 
+def publish_init_error_diagnostics(error_msg, exception_traceback=None):
+    """Publish initialization error diagnostics to MQTT"""
+    try:
+        import paho.mqtt.client as mqtt
+        
+        diagnostics = {
+            'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC'),
+            'error_type': 'modem_init_failure',
+            'error_message': error_msg,
+            'exception': exception_traceback,
+            'device': DEVICE
+        }
+        
+        # Load MQTT config
+        mqtt_host = MQTT_HOST
+        mqtt_port = MQTT_PORT
+        mqtt_user = MQTT_USER
+        mqtt_password = MQTT_PASSWORD
+        
+        if not mqtt_host:
+            _LOGGER.warning("MQTT host not configured, skipping error diagnostics publication")
+            return
+        
+        # Create MQTT client and publish
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        if mqtt_user:
+            client.username_pw_set(mqtt_user, mqtt_password)
+        
+        _LOGGER.info(f"Publishing init error diagnostics to MQTT: {mqtt_host}:{mqtt_port}")
+        client.connect(mqtt_host, mqtt_port, 60)
+        client.loop_start()
+        
+        # Publish with retain flag
+        result = client.publish('sms-gateway/diagnostics', json.dumps(diagnostics), retain=True)
+        
+        # Wait a bit for publish to complete
+        time.sleep(1)
+        client.loop_stop()
+        client.disconnect()
+        
+        if result.rc == 0:
+            _LOGGER.info("Successfully published error diagnostics to MQTT")
+        else:
+            _LOGGER.warning(f"Failed to publish error diagnostics to MQTT, return code: {result.rc}")
+        
+    except Exception as e:
+        _LOGGER.error(f"Failed to publish error diagnostics to MQTT: {e}")
+
 def connect_modem():
-    """Connect to modem with retry logic"""
+    """Connect to modem with retry logic and enhanced error handling"""
     for attempt in range(MAX_RETRIES):
         try:
             _LOGGER.info(f"Attempting to connect to modem (attempt {attempt + 1}/{MAX_RETRIES})")
             state_machine = gammu.StateMachine()
             state_machine.ReadConfig(0)
+            
+            # Detailed logging before Init
+            _LOGGER.debug("Calling StateMachine.Init()...")
+            
             state_machine.Init()
+            
             _LOGGER.info("Successfully connected to modem")
             return state_machine
-        except gammu.ERR_DEVICENOTEXIST:
-            _LOGGER.warning(f"Modem not found at {DEVICE}, will retry in {RETRY_DELAY} seconds...")
-            if attempt < MAX_RETRIES - 1:
+            
+        except gammu.ERR_DEVICENOTEXIST as e:
+            error_msg = f"Modem not found at {DEVICE}"
+            _LOGGER.warning(f"{error_msg}, will retry in {RETRY_DELAY} seconds...")
+            
+            # Log to file with full details
+            try:
+                with open('/tmp/gammu.log', 'a') as f:
+                    f.write(f"\n{'=' * 60}\n")
+                    f.write(f"Modem Init Error (Attempt {attempt + 1}/{MAX_RETRIES})\n")
+                    f.write(f"Timestamp: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
+                    f.write(f"Error: {error_msg}\n")
+                    f.write(f"Exception: {str(e)}\n")
+                    f.write(f"Traceback:\n{traceback.format_exc()}\n")
+                    f.write(f"{'=' * 60}\n")
+            except:
+                pass
+            
+            if attempt == MAX_RETRIES - 1:
+                # Last attempt failed, publish diagnostics
+                publish_init_error_diagnostics(error_msg, traceback.format_exc())
+            elif attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY)
+                
         except Exception as e:
-            _LOGGER.warning(f"Error connecting to modem: {e}, will retry in {RETRY_DELAY} seconds...")
-            if attempt < MAX_RETRIES - 1:
+            error_msg = f"Error connecting to modem: {e}"
+            _LOGGER.warning(f"{error_msg}, will retry in {RETRY_DELAY} seconds...")
+            
+            # Log to file with full details including stdout/stderr from gammu
+            try:
+                with open('/tmp/gammu.log', 'a') as f:
+                    f.write(f"\n{'=' * 60}\n")
+                    f.write(f"Modem Init Error (Attempt {attempt + 1}/{MAX_RETRIES})\n")
+                    f.write(f"Timestamp: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
+                    f.write(f"Device: {DEVICE}\n")
+                    f.write(f"Error: {error_msg}\n")
+                    f.write(f"Exception Type: {type(e).__name__}\n")
+                    f.write(f"Exception: {str(e)}\n")
+                    f.write(f"Traceback:\n{traceback.format_exc()}\n")
+                    
+                    # Try to get gammu identify output
+                    try:
+                        result = subprocess.run(
+                            ['gammu', '--identify'],
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        f.write(f"\nGammu --identify output:\n")
+                        f.write(f"Return code: {result.returncode}\n")
+                        f.write(f"stdout:\n{result.stdout}\n")
+                        f.write(f"stderr:\n{result.stderr}\n")
+                    except Exception as cmd_e:
+                        f.write(f"\nFailed to run gammu --identify: {cmd_e}\n")
+                    
+                    f.write(f"{'=' * 60}\n")
+            except Exception as log_e:
+                _LOGGER.error(f"Failed to write to /tmp/gammu.log: {log_e}")
+            
+            if attempt == MAX_RETRIES - 1:
+                # Last attempt failed, publish diagnostics
+                publish_init_error_diagnostics(error_msg, traceback.format_exc())
+            elif attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY)
+                
     raise Exception("Failed to connect to modem after maximum retries")
 
 def update_ha_sensor(entity_id, state, attributes=None):
