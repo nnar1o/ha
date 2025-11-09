@@ -11,7 +11,10 @@ Send and receive SMS messages through a Huawei modem with native Home Assistant 
 ✅ **Detailed Logging** with timestamps for all operations  
 ✅ **Easy Configuration** through add-on UI  
 ✅ **Dashboard Ready** with pre-configured entity examples  
-✅ **Automatic USB Mode Switching** for Huawei modems (detects and switches from storage mode to modem mode)
+✅ **Automatic USB Mode Switching** for Huawei modems (detects and switches from storage mode to modem mode)  
+✅ **Intelligent Device Detection** with Huawei modem preference when multiple devices present  
+✅ **Auto-Gammurc Generation** with connection testing and diagnostics  
+✅ **MQTT Diagnostics** for troubleshooting connection issues
 
 ## Quick Start
 
@@ -28,15 +31,70 @@ The add-on automatically detects Huawei modems in storage mode and switches them
 **Detected devices are saved to `/data/available_usb.json`** for reference. This file contains:
 - Device paths (e.g., `/dev/ttyUSB0`)
 - Vendor and product IDs
-- Device metadata
+- Device metadata (manufacturer, model, serial number)
+
+### Intelligent Device Detection
 
 **Single Device**: If exactly one modem is detected, it's automatically selected.  
-**Multiple Devices**: When multiple serial devices are detected, the add-on automatically prefers HUAWEI devices. If a HUAWEI device is found, it will be auto-selected. Otherwise, configure the `device` option in the add-on settings to specify which device to use.  
+
+**Multiple Devices**: When multiple serial devices are detected, the add-on intelligently prefers HUAWEI devices using this priority order:
+1. User-configured device in add-on options (always respected, never overridden)
+2. By-id paths containing 'HUAWEI' (case-insensitive)
+3. Vendor ID matching Huawei (12d1)
+4. Manufacturer field containing 'Huawei'
+5. Product/model strings matching common Huawei modem patterns (E3276, E3131, E3372, etc.)
+
+If a HUAWEI device is found, it will be auto-selected. Otherwise, configure the `device` option in the add-on settings to specify which device to use.
+
 **No Device Found**: The add-on continues running and will retry modem detection.
 
-## Automatic Gammu Configuration
+**Storage Mode Detection**: The add-on recognizes these Huawei storage mode VID:PID combinations and automatically attempts mode switching:
+- 12d1:1506 (E3276 storage mode)
+- 12d1:1f01 (Common storage mode)
+- 12d1:1038 (Storage mode variant)
+- And several other variants
 
-The add-on automatically generates `/etc/gammurc` when a device is selected (either automatically or through configuration). The generated configuration includes the device path and fallback connection options (at115200, at9600, at) to ensure reliable modem communication.
+## Automatic Gammu Configuration & Diagnostics
+
+The add-on automatically generates `/etc/gammurc` when a device is selected (either automatically or through configuration).
+
+### Connection Testing
+
+Before starting the main SMS gateway service, the add-on tests multiple connection types in order:
+1. **at115200** - High-speed AT command mode (preferred)
+2. **at9600** - Standard-speed AT command mode (fallback)
+3. **at** - Basic AT command mode (last resort)
+
+The first successful connection is used as the primary configuration. If all tests fail, the add-on still starts but logs detailed diagnostics.
+
+### Diagnostics & Troubleshooting
+
+**Diagnostics File**: `/data/sms_gateway_diagnostics.json` contains:
+- Timestamp of connection tests
+- Device path and selection reason
+- List of attempted connections with success/failure status
+- Error messages for failed attempts
+
+**Gammu Log**: `/tmp/gammu.log` contains:
+- Full output from gammu --identify for each connection test
+- Complete error messages and tracebacks
+- Used gammurc content for each attempt
+
+**MQTT Diagnostics Topic**: `sms-gateway/diagnostics`
+- Automatically publishes diagnostics on startup
+- Published with retain flag for persistence
+- Includes all connection test results
+- Useful for remote monitoring and troubleshooting
+
+To view diagnostics in Home Assistant:
+```yaml
+sensor:
+  - platform: mqtt
+    name: "SMS Gateway Diagnostics"
+    state_topic: "sms-gateway/diagnostics"
+    value_template: "{{ value_json.successful_connection | default('failed') }}"
+    json_attributes_topic: "sms-gateway/diagnostics"
+```
 
 ## Configuration
 
@@ -86,6 +144,7 @@ automation:
 
 - **Outbox**: `sms-gateway/outbox` - Send SMS
 - **Inbox**: `sms-gateway/inbox` - Receive SMS
+- **Diagnostics**: `sms-gateway/diagnostics` - Connection diagnostics and troubleshooting information
 
 ## Supported Hardware
 
