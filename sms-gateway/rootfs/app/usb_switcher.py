@@ -494,6 +494,7 @@ def main():
     # Priority: configured device > single auto-detected device > HUAWEI among multiple > none
     device_to_use = None
     selection_reason = None
+    selected_dev_info = None  # Track selected device info for diagnostics
     
     if configured_device:
         # User has explicitly configured a device, respect that choice
@@ -501,6 +502,11 @@ def main():
         selection_reason = "user-configured in add-on options"
         _LOGGER.info(f"Using configured device: {configured_device}")
         _LOGGER.info(f"Reason: {selection_reason}")
+        # Try to find device info if available
+        for dev in devices:
+            if dev['path'] == configured_device or dev.get('by_id_path') == configured_device:
+                selected_dev_info = dev
+                break
     elif len(devices) == 0:
         # No devices found
         _LOGGER.warning("No serial devices found. The modem may not be connected or may require manual intervention")
@@ -508,7 +514,8 @@ def main():
         selection_reason = "no devices found"
     elif len(devices) == 1:
         # Exactly one device found - auto-select it
-        device_to_use = devices[0]['path']
+        selected_dev_info = devices[0]
+        device_to_use = selected_dev_info['path']
         selection_reason = "single device auto-detected"
         _LOGGER.info(f"Exactly one device found, auto-selecting: {device_to_use}")
         _LOGGER.info(f"Reason: {selection_reason}")
@@ -527,14 +534,14 @@ def main():
         if huawei_devices:
             # Prefer the first Huawei device found
             # Prefer by-id path if available for stability
-            selected_dev = huawei_devices[0]
-            device_to_use = selected_dev.get('by_id_path') or selected_dev['path']
+            selected_dev_info = huawei_devices[0]
+            device_to_use = selected_dev_info.get('by_id_path') or selected_dev_info['path']
             selection_reason = "Huawei modem intelligently selected from multiple devices"
             
             _LOGGER.info(f"Huawei device detected among multiple devices, auto-selecting: {device_to_use}")
             _LOGGER.info(f"Reason: {selection_reason}")
-            _LOGGER.info(f"Device details: vendor={selected_dev['vendor']}, product={selected_dev['product']}, "
-                        f"model={selected_dev.get('model', 'unknown')}, manufacturer={selected_dev.get('manufacturer', 'unknown')}")
+            _LOGGER.info(f"Device details: vendor={selected_dev_info['vendor']}, product={selected_dev_info['product']}, "
+                        f"model={selected_dev_info.get('model', 'unknown')}, manufacturer={selected_dev_info.get('manufacturer', 'unknown')}")
         else:
             # No HUAWEI device found, keep existing behavior
             selection_reason = "multiple non-Huawei devices, manual config required"
@@ -571,11 +578,14 @@ def main():
                 _LOGGER.info(f"✓ Gammu successfully initialized with connection: {successful_conn}")
                 
                 # Publish success diagnostics to MQTT
-                publish_diagnostics_to_mqtt(diagnostics, {
-                    'vendor': selected_dev.get('vendor', 'unknown') if len(devices) > 0 else 'unknown',
-                    'product': selected_dev.get('product', 'unknown') if len(devices) > 0 else 'unknown',
-                    'model': selected_dev.get('model', 'unknown') if len(devices) > 0 else 'unknown'
-                })
+                device_info = {}
+                if selected_dev_info:
+                    device_info = {
+                        'vendor': selected_dev_info.get('vendor', 'unknown'),
+                        'product': selected_dev_info.get('product', 'unknown'),
+                        'model': selected_dev_info.get('model', 'unknown')
+                    }
+                publish_diagnostics_to_mqtt(diagnostics, device_info)
             else:
                 # No working connection found - generate with default but still publish diagnostics
                 generate_gammurc(device_to_use, 'at115200')

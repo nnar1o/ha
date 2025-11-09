@@ -56,7 +56,19 @@ If a HUAWEI device is found, it will be auto-selected. Otherwise, configure the 
 
 ## Automatic Gammu Configuration & Diagnostics
 
-The add-on automatically generates `/etc/gammurc` when a device is selected (either automatically or through configuration).
+The add-on (v1.0.14+) features intelligent modem detection with automatic gammurc generation and comprehensive diagnostics.
+
+### Intelligent Detection & Auto-Gammurc
+
+When a device is selected (either automatically or via configuration):
+1. **Device Detection**: The add-on uses pyudev to gather detailed device information (vendor, product, model, serial, by-id path)
+2. **Smart Selection**: For multiple devices, it intelligently prefers Huawei modems based on:
+   - by-id paths containing 'HUAWEI'
+   - Vendor ID (12d1)
+   - Manufacturer field
+   - Model/product strings (E3276, E3131, E3372, etc.)
+3. **Connection Testing**: Tests multiple connection types with gammu_probe module
+4. **Auto-Configuration**: Generates `/etc/gammurc` with the working connection as primary
 
 ### Connection Testing
 
@@ -65,25 +77,40 @@ Before starting the main SMS gateway service, the add-on tests multiple connecti
 2. **at9600** - Standard-speed AT command mode (fallback)
 3. **at** - Basic AT command mode (last resort)
 
-The first successful connection is used as the primary configuration. If all tests fail, the add-on still starts but logs detailed diagnostics.
+Each connection type is tested with both `gammu --identify` (5s timeout) and Python `gammu.StateMachine.Init()` (10s timeout). The first successful connection is used as the primary configuration. If all tests fail, the add-on still starts but logs detailed diagnostics.
+
+### Colored Logs (v1.0.14+)
+
+The add-on now features ANSI-colored console output for easier log reading:
+- **DEBUG** messages in cyan
+- **INFO** messages in green
+- **WARNING** messages in yellow
+- **ERROR** messages in red
+
+Log files remain in plain text format for compatibility.
 
 ### Diagnostics & Troubleshooting
 
 **Diagnostics File**: `/data/sms_gateway_diagnostics.json` contains:
 - Timestamp of connection tests
 - Device path and selection reason
+- User-configured device (if set)
 - List of attempted connections with success/failure status
 - Error messages for failed attempts
+- Full stdout/stderr from gammu commands (truncated)
 
 **Gammu Log**: `/tmp/gammu.log` contains:
 - Full output from gammu --identify for each connection test
-- Complete error messages and tracebacks
+- Complete error messages and Python tracebacks
 - Used gammurc content for each attempt
+- Modem initialization errors with full details
+- All diagnostic information in plain text (append mode)
 
 **MQTT Diagnostics Topic**: `sms-gateway/diagnostics`
 - Automatically publishes diagnostics on startup
 - Published with retain flag for persistence
 - Includes all connection test results
+- Publishes modem initialization errors from gammu_mqtt.py
 - Useful for remote monitoring and troubleshooting
 
 To view diagnostics in Home Assistant:
@@ -95,6 +122,12 @@ sensor:
     value_template: "{{ value_json.successful_connection | default('failed') }}"
     json_attributes_topic: "sms-gateway/diagnostics"
 ```
+
+### Diagnostic Files Location
+
+- **Diagnostics JSON**: `/data/sms_gateway_diagnostics.json` - Persistent across restarts, contains structured diagnostic data
+- **Detailed Logs**: `/tmp/gammu.log` - Verbose logging with full command outputs and tracebacks
+- **MQTT Topic**: `sms-gateway/diagnostics` - Real-time diagnostics available via MQTT
 
 ## Configuration
 
