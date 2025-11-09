@@ -126,8 +126,15 @@ sensor:
 ### Diagnostic Files Location
 
 - **Diagnostics JSON**: `/data/sms_gateway_diagnostics.json` - Persistent across restarts, contains structured diagnostic data
+- **Status JSON**: `/data/sms_gateway_status.json` - Real-time component status (modem and MQTT) with timestamps
 - **Detailed Logs**: `/tmp/gammu.log` - Verbose logging with full command outputs and tracebacks
 - **MQTT Topic**: `sms-gateway/diagnostics` - Real-time diagnostics available via MQTT
+
+The status file (`/data/sms_gateway_status.json`) contains separate entries for:
+- **modem**: Connection status, device path, connection type, selection reason
+- **mqtt**: Connection status, broker, port, topic information
+
+Both status entries include timestamps and are updated dynamically as components connect/disconnect.
 
 ## Configuration
 

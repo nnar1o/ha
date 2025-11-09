@@ -22,7 +22,7 @@ except ImportError:
 
 # Import custom logger and gammu_probe
 try:
-    from logger import get_logger
+    from logger import get_logger, status_modem, status_mqtt
     _LOGGER = get_logger(__name__)
 except ImportError:
     import logging
@@ -32,6 +32,11 @@ except ImportError:
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     _LOGGER = logging.getLogger(__name__)
+    # Fallback status functions if logger module not available
+    def status_modem(*args, **kwargs):
+        pass
+    def status_mqtt(*args, **kwargs):
+        pass
 
 # Import gammu_probe
 try:
@@ -577,6 +582,10 @@ def main():
                 generate_gammurc(device_to_use, successful_conn)
                 _LOGGER.info(f"✓ Gammu successfully initialized with connection: {successful_conn}")
                 
+                # Use status_modem helper to log success
+                status_modem('connected', device=device_to_use, connection=successful_conn, 
+                           selection_reason=selection_reason)
+                
                 # Publish success diagnostics to MQTT
                 device_info = {}
                 if selected_dev_info:
@@ -586,11 +595,27 @@ def main():
                         'model': selected_dev_info.get('model', 'unknown')
                     }
                 publish_diagnostics_to_mqtt(diagnostics, device_info)
+                
+                # Use status_mqtt helper to log diagnostics publication
+                try:
+                    with open('/data/options.json', 'r') as f:
+                        options = json.load(f)
+                        mqtt_config = options.get('mqtt', {})
+                        mqtt_host = mqtt_config.get('broker', 'core-mosquitto')
+                        mqtt_port = mqtt_config.get('port', 1883)
+                    status_mqtt('connected', broker=mqtt_host, port=mqtt_port, 
+                              topic='sms-gateway/diagnostics', message='diagnostics_published')
+                except:
+                    pass
             else:
                 # No working connection found - generate with default but still publish diagnostics
                 generate_gammurc(device_to_use, 'at115200')
                 _LOGGER.warning("⚠ All gammu connection tests failed. gammurc generated with default settings.")
                 _LOGGER.warning("Check /tmp/gammu.log and /data/sms_gateway_diagnostics.json for details")
+                
+                # Use status_modem helper to log failure
+                status_modem('error', device=device_to_use, connection='at115200', 
+                           error='all_connections_failed', selection_reason=selection_reason)
                 
                 # Publish failure diagnostics to MQTT
                 publish_diagnostics_to_mqtt(diagnostics)
