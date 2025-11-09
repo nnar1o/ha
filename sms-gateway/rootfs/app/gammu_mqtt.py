@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "1.0.12"
+VERSION = "1.0.13"
 
 def log_system_info():
     """Log detailed system information"""
@@ -122,6 +122,7 @@ if DEBUG:
 # MQTT Topics
 INBOX_TOPIC = 'sms-gateway/inbox'
 OUTBOX_TOPIC = 'sms-gateway/outbox'
+DIAGNOSTICS_TOPIC = 'sms-gateway/diagnostics'
 
 # Home Assistant settings
 SUPERVISOR_TOKEN = os.getenv('SUPERVISOR_TOKEN', '')
@@ -444,6 +445,29 @@ def register_ha_service():
     _LOGGER.info("Service registration via API not directly available")
     _LOGGER.info("Users should create automations using MQTT or Node-RED")
 
+def publish_diagnostics_to_mqtt(client, diagnostics_path='/data/sms_gateway_diagnostics.json'):
+    """Publish diagnostics to MQTT if diagnostics file exists"""
+    if not os.path.exists(diagnostics_path):
+        _LOGGER.debug(f"No diagnostics file found at {diagnostics_path}")
+        return
+    
+    try:
+        with open(diagnostics_path, 'r') as f:
+            diagnostics = json.load(f)
+        
+        # Check if there were any failures
+        if diagnostics.get('all_failed', False):
+            _LOGGER.info("Publishing diagnostics to MQTT due to connection failures...")
+            client.publish(DIAGNOSTICS_TOPIC, json.dumps(diagnostics), retain=True)
+            _LOGGER.info(f"Diagnostics published to {DIAGNOSTICS_TOPIC}")
+        else:
+            _LOGGER.debug("All connections successful, no need to publish failure diagnostics")
+            # Still publish success diagnostics for monitoring
+            client.publish(DIAGNOSTICS_TOPIC, json.dumps(diagnostics), retain=True)
+            _LOGGER.debug(f"Success diagnostics published to {DIAGNOSTICS_TOPIC}")
+    except Exception as e:
+        _LOGGER.error(f"Failed to publish diagnostics: {e}")
+
 def main():
     """Main application loop"""
     log_startup_info()
@@ -490,6 +514,9 @@ def main():
     
     # Register HA service (info only)
     register_ha_service()
+    
+    # Publish diagnostics if available (from usb_switcher.py)
+    publish_diagnostics_to_mqtt(client)
     
     # Initialize sensors
     update_ha_sensor(

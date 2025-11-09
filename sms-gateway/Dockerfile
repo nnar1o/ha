@@ -8,6 +8,6 @@ COPY rootfs /
 WORKDIR /app
 
 RUN chmod +x /etc/services.d/sms-gateway/run && \
-    echo "1.0.12" > /app/version.txt
+    echo "1.0.13" > /app/version.txt
 
 ENTRYPOINT ["/init"]
