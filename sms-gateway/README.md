@@ -10,7 +10,8 @@ Send and receive SMS messages through a Huawei modem with native Home Assistant 
 ✅ **Real-time Status** showing modem connection state  
 ✅ **Detailed Logging** with timestamps for all operations  
 ✅ **Easy Configuration** through add-on UI  
-✅ **Dashboard Ready** with pre-configured entity examples
+✅ **Dashboard Ready** with pre-configured entity examples  
+✅ **Automatic USB Mode Switching** for Huawei modems (detects and switches from storage mode to modem mode)
 
 ## Quick Start
 
@@ -19,6 +20,19 @@ Send and receive SMS messages through a Huawei modem with native Home Assistant 
 3. **Connect** your Huawei modem via USB
 4. **Start** the add-on
 5. **Check status** using `binary_sensor.sms_gateway_modem_connected`
+
+## Automatic USB Mode Switching
+
+The add-on automatically detects Huawei modems in storage mode and switches them to modem mode on startup. This eliminates the need for manual `usb_modeswitch` configuration.
+
+**Detected devices are saved to `/data/available_usb.json`** for reference. This file contains:
+- Device paths (e.g., `/dev/ttyUSB0`)
+- Vendor and product IDs
+- Device metadata
+
+**Single Device**: If exactly one modem is detected, it's automatically selected.  
+**Multiple Devices**: Configure the `device` option in the add-on settings to specify which device to use.  
+**No Device Found**: The add-on continues running and will retry modem detection.
 
 ## Configuration
 
