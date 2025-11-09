@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "1.0.10"
+VERSION = "1.0.11"
 
 def log_system_info():
     """Log detailed system information"""
@@ -91,7 +91,9 @@ OPTIONS_PATH = '/data/options.json'
 try:
     with open(OPTIONS_PATH) as f:
         options = json.load(f)
-        DEVICE = options.get('device', '/dev/ttyUSB0')
+        # Prioritize DEVICE env var (set by usb_switcher.py for auto-detection)
+        # Fall back to options, then default
+        DEVICE = os.getenv('DEVICE') or options.get('device', '/dev/ttyUSB0')
         DEBUG = options.get('debug', False)
         NOTIFICATION_ON_RECEIVE = options.get('notification_on_receive', True)
         
@@ -103,7 +105,7 @@ try:
         MQTT_PASSWORD = os.getenv('MQTT_PASSWORD') or options.get('mqtt', {}).get('password', '')
 except FileNotFoundError:
     _LOGGER.warning(f"Options file not found at {OPTIONS_PATH}, using defaults")
-    DEVICE = os.getenv('SERIAL_DEVICE', '/dev/ttyUSB0')
+    DEVICE = os.getenv('DEVICE') or os.getenv('SERIAL_DEVICE', '/dev/ttyUSB0')
     DEBUG = False
     NOTIFICATION_ON_RECEIVE = True
     # Fallback to environment variables for MQTT
