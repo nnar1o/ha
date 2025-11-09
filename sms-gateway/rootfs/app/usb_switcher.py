@@ -13,6 +13,13 @@ import logging
 import glob
 from pathlib import Path
 
+# Try to import pyudev if available (optional)
+try:
+    import pyudev
+    PYUDEV_AVAILABLE = True
+except ImportError:
+    PYUDEV_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -20,6 +27,11 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 _LOGGER = logging.getLogger(__name__)
+
+if PYUDEV_AVAILABLE:
+    _LOGGER.debug("pyudev is available for enhanced device detection")
+else:
+    _LOGGER.debug("pyudev not available, using lsusb and sysfs for device detection")
 
 # Known Huawei VID:PID pairs in storage mode
 HUAWEI_STORAGE_MODE_DEVICES = [
@@ -129,7 +141,7 @@ def wait_for_serial_devices(timeout=DEVICE_WAIT_TIMEOUT):
     return False
 
 def get_device_info_from_path(dev_path):
-    """Get device metadata from sysfs"""
+    """Get device metadata from sysfs or pyudev"""
     metadata = {
         'path': dev_path,
         'vendor': 'unknown',
@@ -138,7 +150,25 @@ def get_device_info_from_path(dev_path):
         'serial': 'unknown'
     }
     
-    # Try to get info from /sys
+    # Try pyudev first if available
+    if PYUDEV_AVAILABLE:
+        try:
+            context = pyudev.Context()
+            device = pyudev.Devices.from_device_file(context, dev_path)
+            
+            # Get parent USB device
+            usb_device = device.find_parent('usb', 'usb_device')
+            if usb_device:
+                metadata['vendor'] = usb_device.get('ID_VENDOR_ID', 'unknown')
+                metadata['product'] = usb_device.get('ID_MODEL_ID', 'unknown')
+                metadata['model'] = usb_device.get('ID_MODEL', 'unknown')
+                metadata['serial'] = usb_device.get('ID_SERIAL_SHORT', 'unknown')
+                _LOGGER.debug(f"Retrieved device info via pyudev for {dev_path}")
+                return metadata
+        except Exception as e:
+            _LOGGER.debug(f"Error using pyudev for {dev_path}, falling back to sysfs: {e}")
+    
+    # Fallback to sysfs
     # The ttyUSB devices are typically under /sys/class/tty/ttyUSBX/
     dev_name = os.path.basename(dev_path)
     sys_path = f'/sys/class/tty/{dev_name}'
