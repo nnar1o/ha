@@ -242,10 +242,57 @@ def save_device_list(devices, output_path='/data/available_usb.json'):
         _LOGGER.error(f"Failed to save device list to {output_path}: {e}")
         return False
 
+def is_huawei_device(device_metadata):
+    """Check if a device is a HUAWEI device based on metadata or by-id path"""
+    # Check vendor ID (12d1 is Huawei)
+    vendor = device_metadata.get('vendor', '').lower()
+    if vendor == '12d1':
+        return True
+    
+    # Check model name
+    model = device_metadata.get('model', '').lower()
+    if 'huawei' in model:
+        return True
+    
+    # Check by-id path if available
+    by_id_path = device_metadata.get('by_id_path', '').lower()
+    if 'huawei' in by_id_path:
+        return True
+    
+    return False
+
+def generate_gammurc(device_path):
+    """Generate /etc/gammurc with device and fallback connections"""
+    gammurc_path = '/etc/gammurc'
+    
+    # Gammurc content with device and fallback connections
+    gammurc_content = f"""[gammu]
+port = {device_path}
+connection = at115200
+
+[gammu1]
+port = {device_path}
+connection = at9600
+
+[gammu2]
+port = {device_path}
+connection = at
+"""
+    
+    try:
+        with open(gammurc_path, 'w') as f:
+            f.write(gammurc_content)
+        _LOGGER.info(f"Successfully generated {gammurc_path} for device {device_path}")
+        _LOGGER.debug(f"Gammurc content:\n{gammurc_content}")
+        return True
+    except Exception as e:
+        _LOGGER.error(f"Failed to generate {gammurc_path}: {e}")
+        return False
+
 def main():
     """Main USB switcher logic"""
     _LOGGER.info("=" * 60)
-    _LOGGER.info("USB Mode Switcher for SMS Gateway v1.0.11")
+    _LOGGER.info("USB Mode Switcher for SMS Gateway v1.0.12")
     _LOGGER.info("=" * 60)
     
     # Load device from options if configured
@@ -291,28 +338,48 @@ def main():
         save_device_list([])
     
     # Step 6: Determine device and set environment
-    # Priority: configured device > single auto-detected device > none
+    # Priority: configured device > single auto-detected device > HUAWEI among multiple > none
+    device_to_use = None
+    
     if configured_device:
         # User has explicitly configured a device, respect that choice
         _LOGGER.info(f"Using configured device: {configured_device}")
-        # Don't override - gammu_mqtt.py will read from options.json
+        device_to_use = configured_device
     elif len(devices) == 1:
         # Exactly one device found - auto-select it
-        auto_device = devices[0]['path']
-        _LOGGER.info(f"Exactly one device found, auto-selecting: {auto_device}")
-        os.environ['DEVICE'] = auto_device
-        _LOGGER.info(f"Set DEVICE environment variable to: {auto_device}")
+        device_to_use = devices[0]['path']
+        _LOGGER.info(f"Exactly one device found, auto-selecting: {device_to_use}")
     elif len(devices) > 1:
-        # Multiple devices found
-        _LOGGER.warning("Multiple serial devices found:")
+        # Multiple devices found - check for HUAWEI devices
+        _LOGGER.info("Multiple serial devices found:")
         for i, dev in enumerate(devices, 1):
-            _LOGGER.warning(f"  {i}. {dev['path']} (vendor: {dev['vendor']}, product: {dev['product']})")
-        _LOGGER.warning("Please configure the 'device' option in the add-on configuration to specify which device to use")
-        _LOGGER.warning("Device list saved to /data/available_usb.json for reference")
+            _LOGGER.info(f"  {i}. {dev['path']} (vendor: {dev['vendor']}, product: {dev['product']}, model: {dev.get('model', 'unknown')})")
+        
+        # Try to find a HUAWEI device
+        huawei_devices = [dev for dev in devices if is_huawei_device(dev)]
+        
+        if huawei_devices:
+            # Prefer HUAWEI device
+            device_to_use = huawei_devices[0].get('by_id_path') or huawei_devices[0]['path']
+            _LOGGER.info(f"HUAWEI device detected among multiple devices, auto-selecting: {device_to_use}")
+            _LOGGER.info(f"Device details: vendor={huawei_devices[0]['vendor']}, product={huawei_devices[0]['product']}, model={huawei_devices[0].get('model', 'unknown')}")
+        else:
+            # No HUAWEI device found, keep existing behavior
+            _LOGGER.warning("No HUAWEI device found among multiple devices")
+            _LOGGER.warning("Please configure the 'device' option in the add-on configuration to specify which device to use")
+            _LOGGER.warning("Device list saved to /data/available_usb.json for reference")
     else:
         # No devices found
         _LOGGER.warning("No serial devices found. The modem may not be connected or may require manual intervention")
         _LOGGER.info("The SMS Gateway will start in modem-not-connected mode and will continue polling")
+    
+    # Set DEVICE environment variable and generate gammurc if device was selected
+    if device_to_use:
+        os.environ['DEVICE'] = device_to_use
+        _LOGGER.info(f"Set DEVICE environment variable to: {device_to_use}")
+        
+        # Generate /etc/gammurc for the selected device
+        generate_gammurc(device_to_use)
     
     # Step 7: Exec gammu_mqtt.py to replace this process
     _LOGGER.info("=" * 60)
