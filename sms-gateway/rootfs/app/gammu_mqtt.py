@@ -95,12 +95,12 @@ try:
         DEBUG = options.get('debug', False)
         NOTIFICATION_ON_RECEIVE = options.get('notification_on_receive', True)
         
-        # MQTT configuration from options
-        mqtt_config = options.get('mqtt', {})
-        MQTT_HOST = mqtt_config.get('broker', 'core-mosquitto')
-        MQTT_PORT = int(mqtt_config.get('port', 1883))
-        MQTT_USER = mqtt_config.get('username', '')
-        MQTT_PASSWORD = mqtt_config.get('password', '')
+        # MQTT configuration - prioritize environment variables from bashio::services
+        # Fall back to options if env vars are not set
+        MQTT_HOST = os.getenv('MQTT_HOST') or options.get('mqtt', {}).get('broker', 'core-mosquitto')
+        MQTT_PORT = int(os.getenv('MQTT_PORT') or options.get('mqtt', {}).get('port', 1883))
+        MQTT_USER = os.getenv('MQTT_USER') or options.get('mqtt', {}).get('username', '')
+        MQTT_PASSWORD = os.getenv('MQTT_PASSWORD') or options.get('mqtt', {}).get('password', '')
 except FileNotFoundError:
     _LOGGER.warning(f"Options file not found at {OPTIONS_PATH}, using defaults")
     DEVICE = os.getenv('SERIAL_DEVICE', '/dev/ttyUSB0')

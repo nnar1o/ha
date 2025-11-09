@@ -28,6 +28,8 @@ debug: false                      # Enable detailed logging
 notification_on_receive: true     # Show notification for new SMS
 ```
 
+**Note**: MQTT credentials are automatically fetched from Home Assistant's MQTT integration. Manual MQTT configuration in the add-on options is no longer required.
+
 ## Home Assistant Entities
 
 The add-on automatically creates:

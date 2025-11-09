@@ -10,11 +10,23 @@ Messages are integrated with Home Assistant via MQTT and native Home Assistant e
 - Supports Huawei modems (12d1:1506)
 - Automatic message polling every 10 seconds
 - Native Home Assistant integration with sensors and events
+- **Automatic MQTT credential fetching** from Home Assistant's MQTT integration
 - Detailed logging with timestamps
 - Configurable device path and options
 - Binary sensor showing modem connection status
 - Sensor showing last received message
 - Event triggered on each new SMS
+
+## MQTT Configuration
+
+**Important**: The add-on automatically fetches MQTT credentials from Home Assistant's MQTT integration using the Supervisor API. You do **not** need to manually configure MQTT credentials in the add-on options.
+
+The add-on will:
+1. Automatically detect if Home Assistant's MQTT integration is configured
+2. Fetch the MQTT broker host, port, username, and password
+3. Use these credentials to connect to the MQTT broker
+
+If the MQTT service is not available through the Supervisor API, the add-on will fall back to manual configuration from the options (for backward compatibility).
 
 ## Configuration Options
 
@@ -315,9 +327,11 @@ To view logs, go to the add-on page in Home Assistant and click on the "Log" tab
 
 **Solutions**:
 1. Verify that the Mosquitto broker add-on is installed and running
-2. Check MQTT credentials if authentication is enabled
-3. Review the add-on logs for connection errors
-4. Ensure the MQTT broker is accessible from the add-on
+2. Ensure Home Assistant's MQTT integration is properly configured
+3. Check the add-on logs to see if MQTT credentials were fetched successfully
+4. If automatic credential fetching fails, you can manually configure MQTT in the add-on options as a fallback
+5. Review the add-on logs for connection errors
+6. Ensure the MQTT broker is accessible from the add-on
 
 ### Configuration Changes Not Taking Effect
 

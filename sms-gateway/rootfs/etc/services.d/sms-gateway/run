@@ -1,4 +1,25 @@
 #!/usr/bin/with-contenv bashio
 echo "Starting SMS Gateway v1.0.10 at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+# Fetch MQTT configuration from Home Assistant using bashio::services
+bashio::log.info "Fetching MQTT configuration from Home Assistant..."
+
+if bashio::services.available "mqtt"; then
+    bashio::log.info "MQTT service is available, fetching credentials..."
+    
+    # Fetch MQTT configuration
+    export MQTT_HOST=$(bashio::services "mqtt" "host")
+    export MQTT_PORT=$(bashio::services "mqtt" "port")
+    export MQTT_USER=$(bashio::services "mqtt" "username")
+    export MQTT_PASSWORD=$(bashio::services "mqtt" "password")
+    
+    bashio::log.info "MQTT configuration fetched successfully"
+    bashio::log.info "MQTT Host: ${MQTT_HOST}"
+    bashio::log.info "MQTT Port: ${MQTT_PORT}"
+    bashio::log.info "MQTT User: ${MQTT_USER}"
+else
+    bashio::log.warning "MQTT service not available, will use config options"
+fi
+
 cd /app
 python3 gammu_mqtt.py
