@@ -28,7 +28,7 @@ except ImportError:
     def status_mqtt(*args, **kwargs):
         pass
 
-VERSION = "1.0.21"
+VERSION = "1.0.22"
 
 def log_system_info():
     """Log detailed system information"""
@@ -149,6 +149,7 @@ HA_URL = 'http://supervisor/core/api'
 # State tracking
 last_message = {"number": "", "text": "", "timestamp": ""}
 modem_connected = False
+processed_locations = set()  # Track already processed SMS locations
 
 def log_sms_received(number, message):
     """Log detailed information about received SMS"""
@@ -526,13 +527,15 @@ def on_message(client, userdata, msg):
 
 def check_inbox(client):
     """Check for incoming SMS messages"""
-    global last_message
+    global last_message, processed_locations
     
     if not check_modem_status():
         _LOGGER.debug("Modem not connected, skipping inbox check")
         return
     
     try:
+        _LOGGER.info("Checking for new SMS messages...")
+        
         # Use gammu without --device flag to use /etc/gammurc configuration
         result = subprocess.run(
             ["gammu", "getallsms"],
@@ -545,11 +548,14 @@ def check_inbox(client):
             _LOGGER.debug("No messages or error getting messages")
             return
         
-        # Log output for debugging
-        if result.stdout.strip():
-            _LOGGER.debug(f"getallsms output: {result.stdout[:500]}")
-            
+        # Count messages by status
+        total_messages = 0
+        unread_messages = 0
+        read_messages = 0
+        
         sms_messages = result.stdout.split("SMS message")
+        total_messages = len(sms_messages) - 1  # First item is header
+        
         for sms in sms_messages[1:]:
             lines = sms.strip().splitlines()
             number = ""
@@ -591,14 +597,18 @@ def check_inbox(client):
                     else:
                         text = line.strip()
             
-            # Only process unread messages
-            if number and text:
-                # Skip already read messages
-                if status.lower() not in ['unread', 'unreceived']:
-                    _LOGGER.debug(f"Skipping already read SMS from {number} (status: {status}, location: {location})")
+            # Only process new messages (not yet processed)
+            if number and text and location:
+                # Skip already processed messages
+                if location in processed_locations:
+                    read_messages += 1
                     continue
                 
-                _LOGGER.info(f"Processing new SMS from {number} (location: {location})")
+                # New message - process it
+                unread_messages += 1
+                processed_locations.add(location)
+                _LOGGER.info(f"📨 New SMS from {number} (location: {location})")
+                _LOGGER.debug(f"Status: {status}, Message: {text[:100]}...")
                 
                 # Log the received SMS
                 log_sms_received(number, text)
@@ -646,6 +656,12 @@ def check_inbox(client):
                 # Note: getallsms automatically marks messages as read
                 # We don't delete them so they remain in modem memory as archive
                 _LOGGER.debug(f"SMS at location {location} marked as read (not deleted)")
+        
+        # Summary log
+        if total_messages > 0:
+            _LOGGER.info(f"✓ Inbox check complete: {total_messages} total ({unread_messages} new, {read_messages} already read)")
+        else:
+            _LOGGER.info("✓ Inbox empty - no messages")
                         
     except subprocess.TimeoutExpired:
         _LOGGER.warning("Timeout while checking inbox")
@@ -749,10 +765,11 @@ def main():
     )
     
     # Main loop
-    _LOGGER.info("Starting message polling loop")
+    poll_interval = 10  # seconds
+    _LOGGER.info(f"Starting message polling loop (checking every {poll_interval} seconds)")
     while True:
         check_inbox(client)
-        time.sleep(10)
+        time.sleep(poll_interval)
 
 if __name__ == "__main__":
     main()
