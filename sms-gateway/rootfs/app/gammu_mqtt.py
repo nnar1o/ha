@@ -17,7 +17,7 @@ try:
 except ImportError:
     # Configure logging with timestamp and proper format
     logging.basicConfig(
-        level=logging.DEBUG,  # Always use DEBUG level
+        level=logging.INFO,  # Default to INFO, will be changed to DEBUG if config says so
         format='%(asctime)s UTC - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
@@ -28,7 +28,7 @@ except ImportError:
     def status_mqtt(*args, **kwargs):
         pass
 
-VERSION = "1.0.20"
+VERSION = "1.0.21"
 
 def log_system_info():
     """Log detailed system information"""
@@ -128,7 +128,14 @@ except FileNotFoundError:
 # Set debug level if enabled
 if DEBUG:
     _LOGGER.setLevel(logging.DEBUG)
+    # Also set level for all handlers
+    for handler in _LOGGER.handlers:
+        handler.setLevel(logging.DEBUG)
     _LOGGER.debug("Debug mode enabled")
+else:
+    _LOGGER.setLevel(logging.INFO)
+    for handler in _LOGGER.handlers:
+        handler.setLevel(logging.INFO)
 
 # MQTT Topics
 INBOX_TOPIC = 'sms-gateway/inbox'

@@ -48,14 +48,14 @@ class PlainFormatter(logging.Formatter):
     pass
 
 
-def setup_logger(name, log_file='/tmp/gammu.log', level=logging.DEBUG, use_colors=True):
+def setup_logger(name, log_file='/tmp/gammu.log', level=logging.INFO, use_colors=True):
     """
     Setup a logger with colored console output and plain file output
     
     Args:
         name: Logger name
         log_file: Path to log file (default: /tmp/gammu.log)
-        level: Logging level (default: DEBUG)
+        level: Logging level (default: INFO)
         use_colors: Whether to use colors in console output
     
     Returns:
