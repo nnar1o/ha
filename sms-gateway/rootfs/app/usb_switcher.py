@@ -444,7 +444,7 @@ def save_diagnostics(diagnostics, output_path='/data/sms_gateway_diagnostics.jso
 def main():
     """Main USB switcher logic"""
     _LOGGER.info("=" * 60)
-    _LOGGER.info("USB Mode Switcher for SMS Gateway v1.0.18")
+    _LOGGER.info("USB Mode Switcher for SMS Gateway v1.0.19")
     _LOGGER.info("=" * 60)
     
     # Load device from options if configured

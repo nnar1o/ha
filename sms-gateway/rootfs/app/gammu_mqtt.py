@@ -28,7 +28,7 @@ except ImportError:
     def status_mqtt(*args, **kwargs):
         pass
 
-VERSION = "1.0.18"
+VERSION = "1.0.19"
 
 def log_system_info():
     """Log detailed system information"""
@@ -548,22 +548,51 @@ def check_inbox(client):
             number = ""
             text = ""
             location = ""
+            status = ""
+            text_started = False
             
-            for line in lines:
-                if "Number :" in line:
+            for i, line in enumerate(lines):
+                # Parse location
+                if line.startswith("Location"):
+                    parts = line.split(",")
+                    if parts:
+                        loc_parts = parts[0].split()
+                        if len(loc_parts) > 1:
+                            location = loc_parts[1].strip()
+                # Parse remote number
+                elif "Remote number" in line:
                     parts = line.split(":", 1)
                     if len(parts) > 1:
-                        number = parts[1].strip()
-                elif "Text :" in line:
+                        number = parts[1].strip().strip('"')
+                # Parse status
+                elif "Status" in line:
                     parts = line.split(":", 1)
                     if len(parts) > 1:
-                        text = parts[1].strip()
-                elif "Location" in line:
-                    parts = line.split(":", 1)
-                    if len(parts) > 1:
-                        location = parts[1].strip()
-                    
+                        status = parts[1].strip()
+                # Check for text after User Data Header or after all metadata
+                elif text_started or (not line.startswith("SMSC") and 
+                                     not line.startswith("Sent") and 
+                                     not line.startswith("Coding") and
+                                     not line.startswith("Remote") and
+                                     not line.startswith("Status") and
+                                     not line.startswith("User Data") and
+                                     not line.startswith("Location") and
+                                     line.strip()):
+                    text_started = True
+                    if text:
+                        text += " " + line.strip()
+                    else:
+                        text = line.strip()
+            
+            # Only process unread messages
             if number and text:
+                # Skip already read messages
+                if status.lower() not in ['unread', 'unreceived']:
+                    _LOGGER.debug(f"Skipping already read SMS from {number} (status: {status}, location: {location})")
+                    continue
+                
+                _LOGGER.info(f"Processing new SMS from {number} (location: {location})")
+                
                 # Log the received SMS
                 log_sms_received(number, text)
                 
