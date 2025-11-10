@@ -171,7 +171,7 @@ def test_gammu_python_init(device_path, connection, section='gammu', timeout=10)
         return False, 'Failed to generate config', None
     
     try:
-        # Set environment variable
+        # Set environment variable (kept for backward compatibility, but not used)
         old_gammurc = os.environ.get('GAMMURC')
         os.environ['GAMMURC'] = config_path
         
@@ -179,7 +179,14 @@ def test_gammu_python_init(device_path, connection, section='gammu', timeout=10)
         
         # Create state machine and try to initialize
         sm = gammu.StateMachine()
-        sm.ReadConfig(0)  # Read first section (index 0)
+        
+        # Set configuration programmatically (not from file)
+        config = {
+            'Device': device_path,
+            'Connection': connection,
+        }
+        _LOGGER.debug(f"Setting gammu config: Device={device_path}, Connection={connection}")
+        sm.SetConfig(0, config)
         
         # Init with timeout simulation (gammu doesn't have built-in timeout)
         # We'll rely on the identify test to catch most issues
@@ -196,7 +203,13 @@ def test_gammu_python_init(device_path, connection, section='gammu', timeout=10)
         return True, None, None
         
     except Exception as e:
-        _LOGGER.debug(f"✗ Python gammu.StateMachine.Init() failed with {connection}: {e}")
+        # Format error message with more details
+        error_msg = str(e)
+        if hasattr(e, 'args') and len(e.args) > 0:
+            if isinstance(e.args[0], dict):
+                error_msg = f"{e.args[0]}"
+        
+        _LOGGER.debug(f"✗ Python gammu.StateMachine.Init() failed with {connection}: {error_msg}")
         
         # Get full traceback
         tb = traceback.format_exc()
@@ -207,7 +220,7 @@ def test_gammu_python_init(device_path, connection, section='gammu', timeout=10)
         elif 'GAMMURC' in os.environ:
             del os.environ['GAMMURC']
         
-        return False, str(e), tb
+        return False, error_msg, tb
     finally:
         # Clean up temp file
         try:

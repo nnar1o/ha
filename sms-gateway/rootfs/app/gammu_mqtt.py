@@ -28,7 +28,7 @@ except ImportError:
     def status_mqtt(*args, **kwargs):
         pass
 
-VERSION = "1.0.15"
+VERSION = "1.0.16"
 
 def log_system_info():
     """Log detailed system information"""
