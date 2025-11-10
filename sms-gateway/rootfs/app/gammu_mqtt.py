@@ -28,7 +28,7 @@ except ImportError:
     def status_mqtt(*args, **kwargs):
         pass
 
-VERSION = "1.0.22"
+VERSION = "1.0.23"
 
 def log_system_info():
     """Log detailed system information"""
@@ -149,7 +149,6 @@ HA_URL = 'http://supervisor/core/api'
 # State tracking
 last_message = {"number": "", "text": "", "timestamp": ""}
 modem_connected = False
-processed_locations = set()  # Track already processed SMS locations
 
 def log_sms_received(number, message):
     """Log detailed information about received SMS"""
@@ -525,9 +524,27 @@ def on_message(client, userdata, msg):
     except Exception as e:
         _LOGGER.error(f"Error processing message: {str(e)}")
 
+def clear_all_sms():
+    """Delete all SMS messages from modem memory"""
+    try:
+        _LOGGER.info("Clearing all old SMS messages from modem...")
+        result = subprocess.run(
+            ["gammu", "deleteallsms", "1"],  # 1 = Inbox folder
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            _LOGGER.info("✓ All old SMS messages cleared successfully")
+        else:
+            _LOGGER.warning(f"Could not clear old messages: {result.stderr}")
+    except Exception as e:
+        _LOGGER.warning(f"Error clearing old SMS: {e}")
+
 def check_inbox(client):
     """Check for incoming SMS messages"""
-    global last_message, processed_locations
+    global last_message
     
     if not check_modem_status():
         _LOGGER.debug("Modem not connected, skipping inbox check")
@@ -597,18 +614,11 @@ def check_inbox(client):
                     else:
                         text = line.strip()
             
-            # Only process new messages (not yet processed)
+            # Process all messages found
             if number and text and location:
-                # Skip already processed messages
-                if location in processed_locations:
-                    read_messages += 1
-                    continue
-                
-                # New message - process it
                 unread_messages += 1
-                processed_locations.add(location)
                 _LOGGER.info(f"📨 New SMS from {number} (location: {location})")
-                _LOGGER.debug(f"Status: {status}, Message: {text[:100]}...")
+                _LOGGER.debug(f"Message: {text[:100]}...")
                 
                 # Log the received SMS
                 log_sms_received(number, text)
@@ -653,15 +663,23 @@ def check_inbox(client):
                         text
                     )
                 
-                # Note: getallsms automatically marks messages as read
-                # We don't delete them so they remain in modem memory as archive
-                _LOGGER.debug(f"SMS at location {location} marked as read (not deleted)")
+                # Delete the message after processing to avoid reprocessing
+                if location:
+                    try:
+                        subprocess.run(
+                            ["gammu", "deletesms", "1", location],
+                            capture_output=True,
+                            timeout=10
+                        )
+                        _LOGGER.debug(f"✓ Deleted SMS at location {location}")
+                    except Exception as e:
+                        _LOGGER.warning(f"Error deleting SMS at {location}: {e}")
         
         # Summary log
-        if total_messages > 0:
-            _LOGGER.info(f"✓ Inbox check complete: {total_messages} total ({unread_messages} new, {read_messages} already read)")
+        if unread_messages > 0:
+            _LOGGER.info(f"✓ Processed {unread_messages} new message(s)")
         else:
-            _LOGGER.info("✓ Inbox empty - no messages")
+            _LOGGER.info("✓ No new messages")
                         
     except subprocess.TimeoutExpired:
         _LOGGER.warning("Timeout while checking inbox")
@@ -728,6 +746,8 @@ def main():
     # Initial modem check
     if check_modem_status():
         _LOGGER.info("Modem is connected and ready")
+        # Clear all old messages on startup to avoid triggering automations with old SMS
+        clear_all_sms()
     else:
         _LOGGER.warning("Modem is not responding, will retry...")
     
