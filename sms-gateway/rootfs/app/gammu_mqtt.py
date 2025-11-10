@@ -28,7 +28,7 @@ except ImportError:
     def status_mqtt(*args, **kwargs):
         pass
 
-VERSION = "1.0.19"
+VERSION = "1.0.20"
 
 def log_system_info():
     """Log detailed system information"""
@@ -636,18 +636,9 @@ def check_inbox(client):
                         text
                     )
                 
-                # Delete the message after processing
-                if location:
-                    try:
-                        # Use gammu without --device flag to use /etc/gammurc configuration
-                        subprocess.run(
-                            ["gammu", "deletesms", "1", location],
-                            capture_output=True,
-                            timeout=10
-                        )
-                        _LOGGER.debug(f"Deleted SMS at location {location}")
-                    except Exception as e:
-                        _LOGGER.warning(f"Error deleting SMS: {e}")
+                # Note: getallsms automatically marks messages as read
+                # We don't delete them so they remain in modem memory as archive
+                _LOGGER.debug(f"SMS at location {location} marked as read (not deleted)")
                         
     except subprocess.TimeoutExpired:
         _LOGGER.warning("Timeout while checking inbox")
