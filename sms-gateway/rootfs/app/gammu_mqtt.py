@@ -28,7 +28,7 @@ except ImportError:
     def status_mqtt(*args, **kwargs):
         pass
 
-VERSION = "1.0.17"
+VERSION = "1.0.18"
 
 def log_system_info():
     """Log detailed system information"""
@@ -537,6 +537,10 @@ def check_inbox(client):
         if result.returncode != 0:
             _LOGGER.debug("No messages or error getting messages")
             return
+        
+        # Log output for debugging
+        if result.stdout.strip():
+            _LOGGER.debug(f"getallsms output: {result.stdout[:500]}")
             
         sms_messages = result.stdout.split("SMS message")
         for sms in sms_messages[1:]:
@@ -547,11 +551,17 @@ def check_inbox(client):
             
             for line in lines:
                 if "Number :" in line:
-                    number = line.split(":", 1)[1].strip()
+                    parts = line.split(":", 1)
+                    if len(parts) > 1:
+                        number = parts[1].strip()
                 elif "Text :" in line:
-                    text = line.split(":", 1)[1].strip()
+                    parts = line.split(":", 1)
+                    if len(parts) > 1:
+                        text = parts[1].strip()
                 elif "Location" in line:
-                    location = line.split(":", 1)[1].strip()
+                    parts = line.split(":", 1)
+                    if len(parts) > 1:
+                        location = parts[1].strip()
                     
             if number and text:
                 # Log the received SMS
@@ -614,6 +624,7 @@ def check_inbox(client):
         _LOGGER.warning("Timeout while checking inbox")
     except Exception as e:
         _LOGGER.error(f"Error checking inbox: {e}")
+        _LOGGER.debug(f"Traceback: {traceback.format_exc()}")
 
 def register_ha_service():
     """Register the send_sms service with Home Assistant"""
