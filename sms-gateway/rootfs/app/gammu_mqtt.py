@@ -28,7 +28,7 @@ except ImportError:
     def status_mqtt(*args, **kwargs):
         pass
 
-VERSION = "1.0.16"
+VERSION = "1.0.17"
 
 def log_system_info():
     """Log detailed system information"""
@@ -417,8 +417,9 @@ def check_modem_status():
     """Check if modem is connected and responsive"""
     global modem_connected
     try:
+        # Use gammu without --device flag to use /etc/gammurc configuration
         result = subprocess.run(
-            ["gammu", "--device", DEVICE, "identify"],
+            ["gammu", "identify"],
             capture_output=True,
             text=True,
             timeout=10
@@ -456,8 +457,9 @@ def send_sms(number, message):
     _LOGGER.debug(f"Time (UTC): {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
     
     try:
+        # Use gammu without --device flag to use /etc/gammurc configuration
         result = subprocess.run(
-            ["gammu", "--device", DEVICE, "sendsms", "TEXT", number, "-text", message],
+            ["gammu", "sendsms", "TEXT", number, "-text", message],
             capture_output=True,
             text=True,
             timeout=30
@@ -524,8 +526,9 @@ def check_inbox(client):
         return
     
     try:
+        # Use gammu without --device flag to use /etc/gammurc configuration
         result = subprocess.run(
-            ["gammu", "--device", DEVICE, "getallsms"],
+            ["gammu", "getallsms"],
             capture_output=True,
             text=True,
             timeout=30
@@ -597,8 +600,9 @@ def check_inbox(client):
                 # Delete the message after processing
                 if location:
                     try:
+                        # Use gammu without --device flag to use /etc/gammurc configuration
                         subprocess.run(
-                            ["gammu", "--device", DEVICE, "deletesms", "1", location],
+                            ["gammu", "deletesms", "1", location],
                             capture_output=True,
                             timeout=10
                         )
