@@ -28,7 +28,7 @@ except ImportError:
     def status_mqtt(*args, **kwargs):
         pass
 
-VERSION = "1.0.23"
+VERSION = "1.0.24"
 
 def log_system_info():
     """Log detailed system information"""
@@ -528,6 +528,20 @@ def clear_all_sms():
     """Delete all SMS messages from modem memory"""
     try:
         _LOGGER.info("Clearing all old SMS messages from modem...")
+        
+        # First, check how many messages we have
+        check_result = subprocess.run(
+            ["gammu", "getallsms"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if check_result.returncode == 0:
+            msg_count = check_result.stdout.count("SMS message")
+            _LOGGER.info(f"Found {msg_count} old message(s) to delete")
+        
+        # Delete all messages
         result = subprocess.run(
             ["gammu", "deleteallsms", "1"],  # 1 = Inbox folder
             capture_output=True,
@@ -537,10 +551,27 @@ def clear_all_sms():
         
         if result.returncode == 0:
             _LOGGER.info("✓ All old SMS messages cleared successfully")
+            _LOGGER.debug(f"deleteallsms output: {result.stdout}")
+            
+            # Verify deletion
+            verify_result = subprocess.run(
+                ["gammu", "getallsms"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            remaining = verify_result.stdout.count("SMS message")
+            if remaining > 0:
+                _LOGGER.warning(f"⚠ {remaining} message(s) still remain after deletion!")
+            else:
+                _LOGGER.info("✓ Inbox is now empty")
         else:
-            _LOGGER.warning(f"Could not clear old messages: {result.stderr}")
+            _LOGGER.warning(f"Could not clear old messages (return code: {result.returncode})")
+            _LOGGER.warning(f"stderr: {result.stderr}")
+            _LOGGER.warning(f"stdout: {result.stdout}")
     except Exception as e:
         _LOGGER.warning(f"Error clearing old SMS: {e}")
+        _LOGGER.debug(f"Traceback: {traceback.format_exc()}")
 
 def check_inbox(client):
     """Check for incoming SMS messages"""
@@ -666,12 +697,17 @@ def check_inbox(client):
                 # Delete the message after processing to avoid reprocessing
                 if location:
                     try:
-                        subprocess.run(
+                        del_result = subprocess.run(
                             ["gammu", "deletesms", "1", location],
                             capture_output=True,
+                            text=True,
                             timeout=10
                         )
-                        _LOGGER.debug(f"✓ Deleted SMS at location {location}")
+                        if del_result.returncode == 0:
+                            _LOGGER.info(f"✓ Deleted SMS at location {location}")
+                        else:
+                            _LOGGER.warning(f"Failed to delete SMS at {location} (rc: {del_result.returncode})")
+                            _LOGGER.debug(f"stderr: {del_result.stderr}, stdout: {del_result.stdout}")
                     except Exception as e:
                         _LOGGER.warning(f"Error deleting SMS at {location}: {e}")
         
