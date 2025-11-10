@@ -28,7 +28,7 @@ except ImportError:
     def status_mqtt(*args, **kwargs):
         pass
 
-VERSION = "1.0.14"
+VERSION = "1.0.15"
 
 def log_system_info():
     """Log detailed system information"""
@@ -204,13 +204,42 @@ def publish_init_error_diagnostics(error_msg, exception_traceback=None):
     except Exception as e:
         _LOGGER.error(f"Failed to publish error diagnostics to MQTT: {e}")
 
+def get_connection_type_from_config():
+    """Get connection type from /etc/gammurc if available"""
+    try:
+        with open('/etc/gammurc', 'r') as f:
+            for line in f:
+                if 'connection' in line.lower() and '=' in line:
+                    connection_type = line.split('=')[1].strip()
+                    _LOGGER.debug(f"Found connection type in /etc/gammurc: {connection_type}")
+                    return connection_type
+    except FileNotFoundError:
+        _LOGGER.debug("/etc/gammurc not found, using default connection type")
+    except Exception as e:
+        _LOGGER.debug(f"Error reading /etc/gammurc: {e}")
+    
+    # Default connection type
+    return 'at115200'
+
 def connect_modem():
     """Connect to modem with retry logic and enhanced error handling"""
     for attempt in range(MAX_RETRIES):
         try:
             _LOGGER.info(f"Attempting to connect to modem (attempt {attempt + 1}/{MAX_RETRIES})")
+            
+            # Get connection type (from config file or default)
+            connection_type = get_connection_type_from_config()
+            
+            # Create state machine and set configuration programmatically
             state_machine = gammu.StateMachine()
-            state_machine.ReadConfig(0)
+            
+            # Set configuration using SetConfig instead of ReadConfig
+            config = {
+                'Device': DEVICE,
+                'Connection': connection_type,
+            }
+            _LOGGER.debug(f"Setting gammu config: Device={DEVICE}, Connection={connection_type}")
+            state_machine.SetConfig(0, config)
             
             # Detailed logging before Init
             _LOGGER.debug("Calling StateMachine.Init()...")
@@ -221,17 +250,6 @@ def connect_modem():
             
             # Use status_modem helper to log success
             try:
-                # Try to get connection info from gammurc
-                connection_type = 'unknown'
-                try:
-                    with open('/etc/gammurc', 'r') as f:
-                        for line in f:
-                            if 'connection' in line.lower() and '=' in line:
-                                connection_type = line.split('=')[1].strip()
-                                break
-                except:
-                    pass
-                
                 status_modem('connected', device=DEVICE, connection=connection_type)
             except:
                 pass  # Don't fail if status helper fails
